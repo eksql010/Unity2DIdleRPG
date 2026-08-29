@@ -1,5 +1,7 @@
 {
-  "env": { "EXP_CONDITION": "prompt-only" },
+  "env": {
+    "EXP_CONDITION": "prompt"
+  },
   "hooks": {
     "Stop": [
       { "hooks": [ { "type": "command", "command": "bash .claude/hooks/log_turn.sh" } ] }
