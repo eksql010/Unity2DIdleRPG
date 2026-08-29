@@ -1,8 +1,0 @@
-{
-  "env": { "EXP_CONDITION": "with-loop" },
-  "hooks": {
-    "Stop": [
-      { "hooks": [ { "type": "command", "command": "bash .claude/hooks/log_turn.sh" } ] }
-    ]
-  }
-}
