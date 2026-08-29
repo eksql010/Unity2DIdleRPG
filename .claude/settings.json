@@ -1,5 +1,7 @@
 {
-  "env": { "EXP_CONDITION": "with-context" },
+  "env": {
+    "EXP_CONDITION": "context"
+  },
   "hooks": {
     "Stop": [
       { "hooks": [ { "type": "command", "command": "bash .claude/hooks/log_turn.sh" } ] }

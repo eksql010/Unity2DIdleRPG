@@ -1,0 +1,2 @@
+timestamp,session_id,feature,turn_count,cum_input_tokens,cum_output_tokens,cum_cache_creation_tokens,cum_cache_read_tokens,read,glob,grep,ls,edit,write,bash
+2026-08-30T01:08:48+09:00,7ca77cad-b317-4d4b-aa44-6dfefbfec28b,unspecified,69,138,64578,204071,5421112,5,0,0,0,7,12,9
