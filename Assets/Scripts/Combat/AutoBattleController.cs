@@ -19,7 +19,7 @@ public class AutoBattleController : MonoBehaviour
 
     [Header("참조")]
     [SerializeField] private MonsterSpawner spawner;
-    [SerializeField] private PlayerCombatStats stats;
+    [SerializeField] private CharacterStats stats;
     [SerializeField] private PlayerWallet wallet;
     [SerializeField] private DamageTextSpawner damageTextSpawner;
     [Tooltip("자동전투가 켜지면 이 수동 입력 핸들러를 비활성화한다.")]
@@ -50,7 +50,7 @@ public class AutoBattleController : MonoBehaviour
     private void Awake()
     {
         _movement = GetComponent<PlayerMovement>();
-        if (stats == null) stats = GetComponent<PlayerCombatStats>();
+        if (stats == null) stats = GetComponent<CharacterStats>();
         if (manualInput == null) manualInput = GetComponent<PlayerInputHandler>();
         if (spawner == null) spawner = FindFirstObjectByType<MonsterSpawner>();
         if (wallet == null) wallet = FindFirstObjectByType<PlayerWallet>();

@@ -79,6 +79,17 @@ public class PlayerMovement : MonoBehaviour
     }
 
     /// <summary>
+    /// 이동 속도를 설정한다. 스탯 파이프라인의 MoveSpeed 최종값을 여기에 반영한다(기획서 5.2).
+    /// </summary>
+    public void SetMoveSpeed(float value)
+    {
+        moveSpeed = Mathf.Max(0f, value);
+    }
+
+    /// <summary>현재 이동 속도.</summary>
+    public float MoveSpeed => moveSpeed;
+
+    /// <summary>
     /// 아래로 점프(드롭다운) 요청. 원웨이 플랫폼 위에 서 있을 때만 동작한다.
     /// 자동전투 FSM 이 아래층 몬스터에게 이동할 때도 호출한다.
     /// </summary>

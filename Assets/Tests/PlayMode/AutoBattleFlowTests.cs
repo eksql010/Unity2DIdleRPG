@@ -55,10 +55,11 @@ public class AutoBattleFlowTests
         SetPrivate(movement, "moveSpeed", 6f);
         SetPrivate(movement, "jumpForce", 12f);
 
-        var stats = player.AddComponent<PlayerCombatStats>();
-        SetPrivate(stats, "attackPower", 50f);
-        SetPrivate(stats, "defense", 5f);
-        SetPrivate(stats, "critRate", 0f);
+        var stats = player.AddComponent<CharacterStats>();
+        SetPrivate(stats, "baseAttackPower", 50f);
+        SetPrivate(stats, "baseDefense", 5f);
+        SetPrivate(stats, "baseCritRate", 0f);
+        SetPrivate(stats, "baseMoveSpeed", 6f);
 
         var wallet = player.AddComponent<PlayerWallet>();
 
