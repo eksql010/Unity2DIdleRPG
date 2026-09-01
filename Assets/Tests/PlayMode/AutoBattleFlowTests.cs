@@ -81,9 +81,8 @@ public class AutoBattleFlowTests
         var spawner = spawnerGo.AddComponent<MonsterSpawner>();
         SetPrivate(spawner, "monsterPrefab", monster);
         SetPrivate(spawner, "spawnPoints", new Transform[] { spawnPoint.transform });
-        SetPrivate(spawner, "maxAlive", 1);
         SetPrivate(spawner, "respawnDelay", 1f);
-        SetPrivate(spawner, "prewarm", 1);
+        SetPrivate(spawner, "corpseLingerTime", 0.1f);
 
         // FSM
         var fsm = player.AddComponent<AutoBattleController>();

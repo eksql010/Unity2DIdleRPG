@@ -11,7 +11,7 @@ public class Monster : MonoBehaviour
 {
     [SerializeField] private MonsterData data = new MonsterData();
     [SerializeField] private SpriteRenderer bodyRenderer;
-    [Tooltip("체력 비율만큼 X 스케일이 줄어드는 HP 바(선택).")]
+    [Tooltip("체력 비율만큼 좌측 고정으로 줄어드는 HP 바 채움(선택).")]
     [SerializeField] private Transform hpBarFill;
 
     private readonly Stat _attackStat = new Stat(0f);
@@ -19,7 +19,12 @@ public class Monster : MonoBehaviour
     private readonly Stat _maxHpStat = new Stat(1f);
 
     private float _currentHp;
+
+    // HP 바 채움의 기준값 (풀 재사용 간에도 유지)
+    private bool _hpBarCached;
     private Vector3 _hpBarBaseScale = Vector3.one;
+    private Vector3 _hpBarBaseLocalPos;
+    private float _hpBarFillWidth = 1f;   // 스케일 1 기준 채움 스프라이트의 로컬 폭
 
     /// <summary>이 몬스터가 죽었을 때 호출된다(자기 자신을 인자로).</summary>
     public event Action<Monster> Died;
@@ -38,10 +43,6 @@ public class Monster : MonoBehaviour
         if (bodyRenderer == null)
         {
             bodyRenderer = GetComponentInChildren<SpriteRenderer>();
-        }
-        if (hpBarFill != null)
-        {
-            _hpBarBaseScale = hpBarFill.localScale;
         }
     }
 
@@ -114,15 +115,46 @@ public class Monster : MonoBehaviour
         UpdateVisual();
     }
 
+    private void CacheHpBarBase()
+    {
+        if (_hpBarCached || hpBarFill == null)
+        {
+            return;
+        }
+        _hpBarCached = true;
+        _hpBarBaseScale = hpBarFill.localScale;
+        _hpBarBaseLocalPos = hpBarFill.localPosition;
+
+        SpriteRenderer fillRenderer = hpBarFill.GetComponent<SpriteRenderer>();
+        if (fillRenderer != null && fillRenderer.sprite != null)
+        {
+            _hpBarFillWidth = fillRenderer.sprite.bounds.size.x;
+        }
+    }
+
     private void UpdateVisual()
     {
         float t = HealthNormalized;
+
         if (hpBarFill != null)
         {
-            Vector3 s = _hpBarBaseScale;
-            s.x = _hpBarBaseScale.x * t;
-            hpBarFill.localScale = s;
+            CacheHpBarBase();
+
+            // 좌측 끝은 고정하고 우측만 안쪽으로 줄어들게 한다.
+            // 스프라이트 피벗이 중앙이므로, 스케일을 줄인 만큼 오른쪽으로 위치를 보정해
+            // 좌측 모서리 X 를 항상 만체력 기준값에 붙여 둔다.
+            float fullHalfWidth = _hpBarBaseScale.x * _hpBarFillWidth * 0.5f;
+            float leftEdgeX = _hpBarBaseLocalPos.x - fullHalfWidth;
+
+            Vector3 scale = _hpBarBaseScale;
+            scale.x = _hpBarBaseScale.x * t;
+            hpBarFill.localScale = scale;
+
+            Vector3 pos = _hpBarBaseLocalPos;
+            pos.x = leftEdgeX + scale.x * _hpBarFillWidth * 0.5f;
+            hpBarFill.localPosition = pos;
         }
+
         if (bodyRenderer != null)
         {
             // 체력이 높으면 보라, 낮을수록 붉게
