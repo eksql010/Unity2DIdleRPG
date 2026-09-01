@@ -11,16 +11,18 @@ using UnityEngine.TestTools;
 ///   (2) 각 층에서 드롭다운으로 바로 아래층까지 내려올 수 있는지
 /// 를 자동 검증한다.
 ///
-/// 플랫폼 간 수직 간격은 현재 점프 파라미터(jumpForce 13, gravityScale 3, mass 1)의
-/// 최대 도달 높이(약 2.87 units)를 기준으로 여유를 둔 2.0 units 이다.
+/// 층 간 간격은 씬에서 실제로 사용하는 <b>다양한 값</b>(1.6~2.1 units)을 그대로 쓴다.
+/// 현재 점프 파라미터(jumpForce 13, gravityScale 3, mass 1)의 최대 도달 높이는 약 2.87 units 이므로
+/// 모든 간격이 한 번의 점프로 도달 가능해야 한다.
 /// </summary>
 public class PlatformClimbTests
 {
     private const float JumpForce = 13f;
     private const float GravityScale = 3f;
-    private const float TierStep = 2.0f;      // 층 간 표면 높이 차 (max 도달 2.87 의 약 70%)
-    private const int TierCount = 3;          // 바닥 위 원웨이 플랫폼 층 수
     private const float GroundSurfaceY = 0f;
+
+    // 씬 배치에서 쓰는 다양한 층 간격(단조롭지 않게)
+    private static readonly float[] TierGaps = { 1.6f, 2.0f, 1.8f, 2.1f };
 
     private GameObject _root;
     private PlayerMovement _movement;
@@ -44,25 +46,27 @@ public class PlatformClimbTests
 
         _root = new GameObject("PlatformClimbRoot");
 
-        // 바닥
         var ground = new GameObject("Ground");
         ground.transform.SetParent(_root.transform);
         ground.layer = groundLayer;
         ground.transform.position = new Vector3(0f, GroundSurfaceY - 0.5f, 0f);
         ground.AddComponent<BoxCollider2D>().size = new Vector2(20f, 1f);
 
-        // 원웨이 플랫폼 층 (모두 x=0 에 수직 정렬)
+        // 폭도 다양하게
+        float[] widths = { 6f, 2.5f, 4f, 3f };
+
         _tierSurfaceY.Clear();
-        for (int i = 1; i <= TierCount; i++)
+        float surfaceY = GroundSurfaceY;
+        for (int i = 0; i < TierGaps.Length; i++)
         {
-            float surfaceY = GroundSurfaceY + TierStep * i;
+            surfaceY += TierGaps[i];
             _tierSurfaceY.Add(surfaceY);
 
             var plat = new GameObject($"OneWay_Tier{i}");
             plat.transform.SetParent(_root.transform);
             plat.layer = oneWayLayer;
             plat.transform.position = new Vector3(0f, surfaceY - 0.15f, 0f);
-            plat.transform.localScale = new Vector3(6f, 0.3f, 1f);
+            plat.transform.localScale = new Vector3(widths[i % widths.Length], 0.3f, 1f);
             var col = plat.AddComponent<BoxCollider2D>();
             col.size = new Vector2(1f, 1f);
             col.usedByEffector = true;
@@ -71,7 +75,6 @@ public class PlatformClimbTests
             eff.surfaceArc = 170f;
         }
 
-        // 플레이어
         var player = new GameObject("Player");
         player.transform.SetParent(_root.transform);
         player.transform.position = new Vector3(0f, GroundSurfaceY + 1f, 0f);
@@ -141,9 +144,8 @@ public class PlatformClimbTests
         yield return SettleUntilGrounded();
         Assert.AreEqual(-1, CurrentTier(), "바닥에서 시작해야 합니다.");
 
-        for (int target = 0; target < TierCount; target++)
+        for (int target = 0; target < TierGaps.Length; target++)
         {
-            // 한 층 오를 때까지 점프 반복(최대 6회)
             int jumps = 0;
             while (CurrentTier() < target && jumps < 6)
             {
@@ -153,20 +155,20 @@ public class PlatformClimbTests
             }
 
             Assert.AreEqual(target, CurrentTier(),
-                $"{target}층(표면 y={_tierSurfaceY[target]:0.00})에 점프로 도달하지 못했습니다. " +
-                $"현재 발 높이 ≈ {_rb.position.y - 0.8f:0.00}");
+                $"{target}층(표면 y={_tierSurfaceY[target]:0.00}, 간격 {TierGaps[target]:0.0})에 " +
+                $"점프로 도달하지 못했습니다. 현재 발 높이 ≈ {_rb.position.y - 0.8f:0.00}");
         }
     }
 
     [UnityTest]
     public IEnumerator Player_CanDropDown_EveryTier_InOrder()
     {
-        // 최상층까지 순간이동 후, 드롭다운으로 한 층씩 내려오는지 확인
-        _rb.position = new Vector2(0f, _tierSurfaceY[TierCount - 1] + 0.8f);
+        int top = TierGaps.Length - 1;
+        _rb.position = new Vector2(0f, _tierSurfaceY[top] + 0.8f);
         yield return SettleUntilGrounded();
-        Assert.AreEqual(TierCount - 1, CurrentTier(), "최상층에 서 있어야 합니다.");
+        Assert.AreEqual(top, CurrentTier(), "최상층에 서 있어야 합니다.");
 
-        for (int expected = TierCount - 2; expected >= -1; expected--)
+        for (int expected = top - 1; expected >= -1; expected--)
         {
             int before = CurrentTier();
             _movement.DropDown();
