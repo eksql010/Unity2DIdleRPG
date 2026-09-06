@@ -5,18 +5,36 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계 전부 완료. 3단계 전부 완료. 4단계-1 완료. 4단계-2 완료. 4단계-3a 완료.**
-다음은 **4단계-3b**: 데미지 텍스트(플로팅 데미지 숫자) + Game.unity 배선 + 플레이모드 스크린샷.
-· FSM `MonsterDamaged(Monster, DamageResult)` 이벤트를 구독하는 `DamageTextSpawner`(MonoBehaviour) 신설.
-  맞은 몬스터 위치 위에 숫자 텍스트를 띄우고 위로 떠오르며 페이드아웃 후 반납. Object Pooling(DESIGN 4.4)
-  — `Instantiate/Destroy` 반복 금지. 크리티컬(`DamageResult.IsCrit`)이면 색/크기 구분.
-· Game.unity 배선: Player 의 `AutoBattleFsm` 은 이미 씬에 있고 `playerMovement` 가 주입돼 있어
-  Awake 에서 데미지 파이프라인이 자동 구성됨(4단계-3a). `DamageTextSpawner` 를 Player(또는 별도
-  GameObject)에 부착하고 FSM 참조 주입. 폰트는 LegacyRuntime.ttf.
-· 플레이모드 스크린샷으로 몬스터 위에 데미지 숫자(+크리티컬 강조)가 뜨는지 직접 확인.
-· 4단계-3b 완료 시 4단계 종료 → DESIGN 9장 체크리스트 3번("처치 시 스탯 파이프라인 기반 데미지 계산") 충족.
+**1단계 완료. 2단계 완료. 3단계 완료. 4단계 전부 완료(4단계-1/2/3a/3b).**
+**→ DESIGN 9장 완료 기준 체크리스트 5개 항목 전부 충족. MVP 핵심 로직 5개 시스템 구현 완료.**
+
+다음 바퀴는 읽을 게 없으면(INBOX 비어 있음) PROMPT ② 규칙대로 "대기: 입력 없음"으로 끝낸다.
+남은 것은 전부 MVP 범위 밖의 폴리시/확장(예: 오프라인 보상 exp/gold 를 PlayerWallet 에 실제 반영,
+데미지 텍스트를 시간차로 흩뿌리기, 다층 레벨 이동 검증). 필요해지면 INBOX 에 지시를 남길 것.
+
+### DESIGN 9장 완료 기준 체크리스트
+- [x] 플레이어가 좌우 이동, 점프, 원웨이 플랫폼 드롭다운을 모두 수행 (1단계)
+- [x] 자동전투 FSM 이 스스로 몬스터를 찾아 이동(점프/드롭다운)하고 처치 (3단계)
+- [x] 처치 시 스탯 파이프라인 기반 데미지 계산 → 몬스터 HP 감소 (4단계-3a 배선, 3b 시각화)
+- [x] 재접속 시 경과 시간 비례 보상 지급 (2단계)
+- [x] 오프라인 보상 최대 캡 적용 (2단계)
 
 ### 4단계 슬라이스
+- [x] 4단계-3b: `DamageText` / `DamageTextPool` / `DamageTextSpawner` 신규 3파일 — 플로팅 데미지 숫자.
+  · `DamageText`(MonoBehaviour) — 월드 `TextMesh` 하나. `Play(worldPos, amount, isCrit)` 시 데미지를
+    정수 반올림해 표시(크리티컬은 `"24!"` + 주황색 + 스케일 1.5). `Tick(dt)` 가 위로 상승 + 수명(0.7s)
+    후반 40% 구간 알파 페이드, 수명 끝나면 false 반환. 스스로 Destroy 안 함(`Hide()` 로 비활성).
+  · `DamageTextPool` — `MonsterPool` 과 같은 설계. `Func<DamageText>` 주입 순수 클래스, prewarm/Rent/
+    Return, 중복 반납 무시, `TotalCreated`/`IdleCount`. (기획서 4.4 — Instantiate/Destroy 반복 금지)
+  · `DamageTextSpawner`(MonoBehaviour) — `AutoBattleFsm.MonsterDamaged` 구독(LootCollector 와 동일한
+    OnEnable/OnDisable/_subscribed 패턴). 타격 시 풀에서 꺼내 맞은 몬스터 `verticalOffset`(0.9) 위에
+    `Play`, `Update`/`Tick(dt)` 로 활성 리스트 진행 후 수명 끝난 것 반납. 데미지 텍스트는 부모 없이
+    생성(Player 의 비균일 스케일 1.6y 로 숫자가 늘어나는 것 방지). 폰트 미지정 시 빌트인
+    LegacyRuntime.ttf 폴백. `Configure(fsm, font)` 주입식. FSM 은 데미지 텍스트를 모른다(의존성 분리).
+  · Game.unity 배선: Player 에 `DamageTextSpawner` 부착 + `fsm` = Player 의 AutoBattleFsm 주입
+    (execute_code codedom + SerializedObject).
+  · PlayMode `Assets/Tests/PlayMode/DamageTextTests.cs` 12종.
+  → 커밋 0787006(스크립트+테스트) / f375dc0(Game.unity 배선). STATUS 갱신은 별도 커밋.
 - [x] 4단계-3a: `Monster.Stats`(StatContainer) + `AutoBattleFsm` 데미지 파이프라인 배선.
   · `Monster.Stats` — 스폰 시 `StatContainer.ForMonster(Data)`. 데미지 공식이 방어력을 여기서 읽는다.
   · `AutoBattleFsm.ConfigureCombat(StatContainer playerStats, DamageCalculator)` 명시 주입.
@@ -131,6 +149,31 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #16
+- 한 일: 4단계-3b 슬라이스 — 플로팅 데미지 숫자. 신규 3파일(`DamageText` / `DamageTextPool` /
+  `DamageTextSpawner`). `AutoBattleFsm.MonsterDamaged(Monster, DamageResult)` 를 구독해 맞은 몬스터
+  위에 `TextMesh` 숫자를 띄우고, 위로 떠오르며 수명 후반부에 페이드아웃한 뒤 풀로 반납한다.
+  크리티컬은 `"24!"` + 주황색 + 스케일 1.5 로 구분(기획서 5.3). Object Pooling(`DamageTextPool`,
+  `MonsterPool` 과 같은 설계)으로 Instantiate/Destroy 반복 없음(기획서 4.4) — 플레이모드에서
+  타격 66회에도 풀 인스턴스는 8개로 고정. FSM 은 데미지 텍스트를 모르게 두어(의존성 분리,
+  LootCollector 와 동일 구조) 4단계-3a 테스트 10종 무수정 통과. Game.unity 의 Player 에
+  `DamageTextSpawner` 부착 + `fsm` 주입(execute_code codedom + SerializedObject).
+  → 4단계 종료 + DESIGN 9장 체크리스트 5개 항목 전부 충족.
+- 확인한 것: EditMode 65/65(무변화), PlayMode 65/65(기존 53 + DamageTextTests 12종).
+  콘솔 CS/게임플레이 에러 0 (TestResults.xml 저장 로그만).
+  신규 12종: DamageText 4(정수 반올림 표시 + 상승 / 크리티컬 강조표시·색·크기 / 수명 후 Tick false
+  & 알파 0 수렴 / Hide 비활성), Pool 3(반납분 재사용·재생성 안 함 / 중복반납 무시 / null 팩토리 거부),
+  Spawner 5(MonsterDamaged → 맞은 몬스터 위에 숫자 / 크리티컬 결과 강조 / 여러 타격 수명 후 전부
+  반납·인스턴스 재사용 / 비활성 스포너는 안 띄움 / 실제 FSM 타격이 데미지 숫자로 이어짐).
+  플레이모드 스크린샷 `Assets/Screenshots/damage_text_4-3b.png` 직접 확인 — 빨간 몬스터 위로
+  흰 "9"(상승·페이드 중) / 주황 "24!"(크리티컬, 큼) / 흰 "13" 이 떠 있음. 우상단 HUD "골드 120
+  경험치 240", 시안 원웨이/회색 공중발판/하단 Login·Logout 정상 렌더.
+  (스크린샷은 여러 타격을 강제로 동시 발생시킨 QA 구도 — 실제 전투에선 시간차로 흩어져 뜬다.)
+- 커밋: 0787006 (DamageText 3파일 + PlayMode 테스트), f375dc0 (Game.unity 배선).
+  STATUS 갱신은 별도 커밋. ProjectSettings.asset 의 변화는 이번 작업과 무관(플레이모드 부수효과)이라 제외.
+- 다음 할 일: INBOX 비어 있고 STATUS 에 다음 할 일 없음 → 다음 바퀴는 "대기: 입력 없음"으로
+  끝낸다. MVP 범위 밖 확장이 필요하면 INBOX 에 지시를 남길 것.
 
 ### 2026-09-07 바퀴 #15
 - 한 일: 4단계-3a 슬라이스 — 자동전투 FSM 의 Attack 을 데미지 파이프라인(DESIGN 5.3)에 연결.
