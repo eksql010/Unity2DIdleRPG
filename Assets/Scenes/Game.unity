@@ -1839,6 +1839,7 @@ GameObject:
   - component: {fileID: 1281589123}
   - component: {fileID: 1281589122}
   - component: {fileID: 1281589125}
+  - component: {fileID: 1281589126}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -2110,6 +2111,20 @@ MonoBehaviour:
   fsm: {fileID: 1281589121}
   font: {fileID: 0}
   verticalOffset: 0.9
+  prewarm: 8
+--- !u!114 &1281589126
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1281589114}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d35b4dd553b9d14f8fca2ddd5aa6eb2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game::MonsterHealthBarSpawner
+  fsm: {fileID: 1281589121}
   prewarm: 8
 --- !u!1 &1304723974
 GameObject:

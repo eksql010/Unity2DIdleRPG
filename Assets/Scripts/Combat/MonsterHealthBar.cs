@@ -20,10 +20,10 @@ public class MonsterHealthBar : MonoBehaviour
     [SerializeField] private float barWidth = 1.1f;
 
     [Tooltip("게이지 높이(월드 단위).")]
-    [SerializeField] private float barHeight = 0.16f;
+    [SerializeField] private float barHeight = 0.22f;
 
     [Tooltip("몬스터 위치에서 게이지를 얼마나 위에 띄울지(월드 단위).")]
-    [SerializeField] private float verticalOffset = 0.95f;
+    [SerializeField] private float verticalOffset = 1.05f;
 
     [Tooltip("게이지 배경(빈 체력) 색.")]
     [SerializeField] private Color backColor = new Color(0.11f, 0.11f, 0.11f, 0.85f);
