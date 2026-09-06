@@ -9,10 +9,10 @@ $LOOP_MODEL = "claude-sonnet-5"
 # 한 바퀴 최대 턴 수: 세션이 이 턴 수를 넘으면 강제 종료된다.
 #   감으로 넣지 말 것. 두 바퀴 이상 돌린 로그(research-logs/loop.csv 의 turn_count)를
 #   보고 정하라. 너무 작으면 작업이 잘리고, 너무 크면 폭주한다.
-$LOOP_MAX_TURNS = 40
+$LOOP_MAX_TURNS = 120
 
 # 바퀴 사이 대기(초): 한 바퀴가 끝나고 다음 바퀴를 열기 전 쉬는 시간.
-$LOOP_SLEEP_SEC = 30
+$LOOP_SLEEP_SEC = 60
 
 # 최대 바퀴 수: 이 횟수만큼 돌면 정상 종료한다. 0 = 무제한.
 $LOOP_MAX_ROUNDS = 0

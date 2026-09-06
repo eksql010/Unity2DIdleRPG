@@ -69,14 +69,24 @@ while ($true) {
     # 프롬프트를 stdin 으로 파이프하면 PS 5.1 인코딩에서 한글이 깨지므로 인자로만 준다.
     $bootstrap = "Read the file loop/PROMPT.md in this repository and do exactly what it says for one round, then stop."
 
+    # 이번 바퀴 전용 세션 ID를 직접 발급 (새 세션인지 나중에 로그로 확실히 검증하기 위함)
+    $roundSessionId = [guid]::NewGuid().ToString()
+    Write-Log "바퀴 #$round 세션 ID: $roundSessionId"
+
+    # 백틱 줄바꿈 대신 배열(스플래팅)로 인자를 넘긴다 — PS 5.1에서 백틱 뒤 공백 하나로도
+    # 줄바꿈이 조용히 깨지는 문제를 구조적으로 피하기 위함.
+    $claudeArgs = @(
+        "-p", $bootstrap,
+        "--model", $LOOP_MODEL,
+        "--max-turns", $LOOP_MAX_TURNS,
+        "--permission-mode", $LOOP_PERMISSION_MODE,
+        "--add-dir", $LOOP_REPO,
+        "--session-id", $roundSessionId
+    )
+
     try {
         # 새 헤드리스 세션. --continue / --resume 를 쓰지 않으므로 매번 백지에서 시작한다.
-        & claude -p $bootstrap `
-            --model $LOOP_MODEL `
-            --max-turns $LOOP_MAX_TURNS `
-            --permission-mode $LOOP_PERMISSION_MODE `
-            --add-dir $LOOP_REPO `
-            2>&1 | Tee-Object -FilePath $roundLog -Append
+        & claude @claudeArgs 2>&1 | Tee-Object -FilePath $roundLog -Append
         $code = $LASTEXITCODE
         Write-Log "바퀴 #$round 종료 (exit=$code)"
     }
