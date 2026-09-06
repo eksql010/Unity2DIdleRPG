@@ -5,14 +5,18 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계-1(오프라인 보상 계산) 완료.** 이제 2단계-2로 진행.
+**1단계 완료. 2단계-1·2단계-2 완료.** 이제 2단계-3(보상 팝업 UI)으로 진행.
 
 2단계: 오프라인 방치 보상 (DESIGN.md 6장). 코드량 적고 독립적. 슬라이스:
 - [x] 2단계-1: OfflineRewardCalculator — 순수 계산 클래스(경과시간 → exp/gold),
   최대 캡(8h), 시간 되돌리기 방어. EditMode 테스트로 검증.  → 커밋 eb7f4f4
-- [ ] 2단계-2: 종료시각 저장/복원 (PlayerPrefs 또는 JSON), 재접속 시 계산 호출.
-  OfflineRewardCalculator 를 감싸는 서비스 계층 + 저장소. UTC 기준으로 저장할 것.
+- [x] 2단계-2: 종료시각 저장/복원 + 재접속 시 계산 호출. OfflineRewardService
+  (계산기 + IOfflineTimeStore + IOfflineClock 조합), PlayerPrefsOfflineTimeStore
+  (ISO8601 "o" 문자열, UTC 왕복). EditMode 테스트로 검증.  → 커밋 45ab163
 - [ ] 2단계-3: 보상 팝업 UI + Login/Logout 토글 버튼(DESIGN 6.3), 플레이모드 스크린샷.
+  Game 씬에 MonoBehaviour(예: OfflineRewardController) 를 두고 OfflineRewardService 를
+  구성 — Awake/Start 에서 ClaimOnReconnect, Logout 버튼→MarkSeen, Login 버튼→ClaimOnReconnect
+  후 결과를 팝업 텍스트로 표시. killsPerMinute/expPerKill/goldPerKill 는 인스펙터 필드로.
 
 그 다음: 3단계 자동전투 FSM → 4단계 스탯/데미지 파이프라인 (DESIGN.md 8장 순서)
 
@@ -33,6 +37,30 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #7
+- 한 일: 2단계-2 슬라이스 — `Assets/Scripts/Offline/OfflineRewardService.cs` 신규.
+  · `IOfflineClock` / `SystemOfflineClock` — 현재 UTC 시각 주입용 추상화.
+  · `IOfflineTimeStore` / `PlayerPrefsOfflineTimeStore` — 마지막 접속 시각 저장/복원.
+    ISO 8601 왕복 형식("o", 항상 'Z')으로 PlayerPrefs 에 문자열 저장, 읽을 때
+    RoundtripKind 파싱 → Kind=Utc. 손상된 값은 null(저장된 적 없음)로 취급. 키 기본값
+    "offline.lastSeenUtc", 생성자로 교체 가능.
+  · `OfflineRewardService` — 계산기 + 저장소 + 시계 조합(모두 생성자 주입, 시계 생략 시
+    SystemOfflineClock). `MarkSeen()` = 현재 UTC 저장(종료/일시정지용).
+    `ClaimOnReconnect()` = 저장된 시각 없으면 계산 없이 현재만 기록 후 null 반환;
+    있으면 Calculate(lastSeen, now) 후 rejected 아니면 기준 시각을 now 로 갱신
+    (같은 구간 두 번 보상 방지, 시간 되돌리기 시엔 기준을 과거로 밀지 않아 단조 증가 유지).
+    `HasLastSeen` 프로퍼티. 생성자는 null 계산기/저장소를 ArgumentNullException 으로 거부.
+  MonoBehaviour 아님 → Unity 수명주기 훅(OnApplicationPause/Quit)과 팝업 UI 는 2단계-3.
+- 확인한 것: EditMode 테스트 `Assets/Tests/EditMode/OfflineRewardServiceTests.cs` 11종
+  신설 — 서비스 7종(첫 실행 기록만 / 경과 비례 보상 / 수령 후 기준 갱신→재수령 rejected /
+  시간 되돌리기 rejected & 기준 안 밀림 / 캡 서비스 경로 적용 / MarkSeen 현재시각 저장 /
+  null 인자 거부), 저장소 4종(Local→UTC 왕복 & Kind=Utc / 미저장 시 null / 손상값 null /
+  Clear 후 null). FakeClock·InMemoryTimeStore 페이크 주입, 저장소 테스트는 전용 키
+  "test.offline.lastSeenUtc" + SetUp/TearDown 에서 삭제. EditMode 20/20, PlayMode 14/14 통과.
+  콘솔 CS 에러 0. 화면 없는 서비스 로직이라 스크린샷 불필요(스크린샷은 2단계-3).
+- 커밋: 45ab163 (서비스 + 저장소 + EditMode 테스트), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 2단계-3 (보상 팝업 UI + Login/Logout 토글 버튼, 플레이모드 스크린샷).
 
 ### 2026-09-07 바퀴 #6
 - 한 일: 2단계-1 슬라이스 — `Assets/Scripts/Offline/OfflineRewardCalculator.cs` 신규.
