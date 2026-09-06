@@ -5,14 +5,29 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계 전부 완료. 3단계 전부 완료. 4단계-1 완료.**
-다음은 **4단계-2: DamageCalculator** — 데미지 공식 `(공격력 - 방어력 보정치) × 크리티컬 배율
-(발동 시 1.5배) × 기타 % 증가 배율` (DESIGN 5.3). 크리티컬 발동 판정은 주입식(`Func<bool>` 또는
-`IRandom`)으로 빼서 EditMode 로 결정적 검증. 입력은 4단계-1 의 `StatContainer`(공격자/피격자).
-그 다음 **4단계-3**: `AutoBattleFsm.attackDamage`(고정값) 와 `Monster.TakeDamage` 앞단을
-DamageCalculator 로 교체 + 플레이어/몬스터에 StatContainer 부착 + 데미지 텍스트(플레이모드 스크린샷).
+**1단계 완료. 2단계 전부 완료. 3단계 전부 완료. 4단계-1 완료. 4단계-2 완료.**
+다음은 **4단계-3**: `AutoBattleFsm.attackDamage`(고정값) 와 `Monster.TakeDamage` 앞단을
+`DamageCalculator` 로 교체 + 플레이어/몬스터에 `StatContainer` 부착 + 데미지 텍스트(플레이모드 스크린샷).
+· FSM 에 `DamageCalculator`(런타임은 `new DamageCalculator()` = 난수 판정기) + 플레이어 `StatContainer`
+  주입. Attack 상태에서 `calc.Calculate(playerStats, target.Stats)` → `target.TakeDamage(result.Damage)`.
+· `Monster` 에 `StatContainer`(스폰 시 `StatContainer.ForMonster(Data)`) 노출 — 현재 `Monster` 는 HP만
+  들고 있으므로 방어력을 계산에 넣으려면 스탯 컨테이너를 붙여야 한다.
+· 데미지 텍스트: 크리티컬 여부(`DamageResult.IsCrit`)에 따라 색/크기 구분, Object Pooling(DESIGN 4.4).
+  플레이모드 스크린샷으로 몬스터 위에 데미지 숫자가 뜨는지 직접 확인.
+· 4단계 완료 시 DESIGN 9장 체크리스트 3번("처치 시 스탯 파이프라인 기반 데미지 계산") 충족.
 
 ### 4단계 슬라이스
+- [x] 4단계-2: `Assets/Scripts/Combat/DamageCalculator.cs` 신규 1파일 — 데미지 공식(DESIGN 5.3).
+  · `ICritChanceRoller.Roll(prob)` — 크리티컬 판정 추상화. `UnityCritChanceRoller`(런타임, `Random.value`,
+    prob≤0 항상 false / prob≥1 항상 true). 테스트는 `FixedRoller` 페이크 주입 → 결정적.
+  · `DamageResult` — `Damage`(최종) / `IsCrit` / `BaseDamage`(방어력만 반영, 배율 전).
+  · `DamageCalculator(critRoller=null, minimumDamage=1)` — `Calculate(attacker, target, extraMultiplier=1)`.
+    `afterDefense = max(attacker.AttackPower.Value - target.Defense.Value, minimumDamage)`,
+    `isCrit = critRate>0 && roller.Roll(critRate)` (CritRate 0 이면 판정기 호출 안 함),
+    `Damage = afterDefense × (isCrit ? 1.5 : 1) × max(extraMultiplier, 0)`.
+    attacker null → ArgumentNullException, target null → 방어력 0, minimumDamage 음수 → 0 클램프.
+  · EditMode `Assets/Tests/EditMode/DamageCalculatorTests.cs` 17종.
+  → 커밋 67fffa8 (STATUS 갱신은 별도 커밋)
 - [x] 4단계-1: `Assets/Scripts/Stats/` 신규 3파일 — 레이어드 스탯 + Dirty Flag.
   · `StatModifier` — 불변 값 객체. `StatModifierType{Flat=100, PercentAdd=200, PercentMultiply=300}`,
     `Value`/`Type`/`Source`(출처, 일괄 제거용). `StatModifier.Flat/PercentAdd/PercentMultiply` 팩토리.
@@ -103,6 +118,27 @@ DamageCalculator 로 교체 + 플레이어/몬스터에 StatContainer 부착 + �
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #14
+- 한 일: 4단계-2 슬라이스 — 데미지 계산 파이프라인(DESIGN 5.3). `Assets/Scripts/Combat/DamageCalculator.cs`
+  신규 1파일(`ICritChanceRoller` + `UnityCritChanceRoller` + `DamageResult` + `DamageCalculator`).
+  MonoBehaviour 아닌 순수 클래스. 공식: `(공격력 - 방어력) × 크리티컬(1.5) × 기타 배율`, 입력은
+  4단계-1 `StatContainer` 의 최종값(`Stat.Value`, 수정자 반영). 크리티컬 판정을 `ICritChanceRoller`
+  로 분리 주입 → 런타임은 난수, 테스트는 페이크로 결정적. 방어력≥공격력이어도 `minimumDamage`(기본 1)
+  로 최소 데미지 보장(교착 방지). CritRate 0 이면 판정기 미호출. 자세한 내용은 위 "4단계 슬라이스" 참고.
+  FSM/Monster 배선·데미지 텍스트는 이 슬라이스 밖(4단계-3).
+- 확인한 것: EditMode 65/65(기존 48 + DamageCalculatorTests 17), PlayMode 47/47(무수정 통과).
+  콘솔 CS/게임플레이 에러 0 (TestResults.xml 저장 로그 / connection.state_change 는 무관).
+  신규 17종: 기본 공식 4종(방어력 뺄셈 / 크리 1.5배 / 기타 배율 / 크리+기타 동시 곱),
+  최소 데미지 3종(방어 우세 시 1 보장 / 생성자 변경 / 음수 → 0), 크리 확률 전달 3종
+  (CritRate 를 판정기에 전달·RollCount / CritRate 0 이면 미호출 / 수정자 반영된 확률),
+  방어적 3종(피격자 null → 방어력 0 / 공격자 null → 예외 / 음수 기타배율 → 0),
+  스탯 연동 2종(공격력·방어력 수정자 최종값 / ForMonster 로 양방향 계산),
+  난수 판정기 경계 2종(확률 1·0 / BaseDamage vs Damage).
+  화면 없는 순수 로직이라 스크린샷 불필요(스크린샷은 4단계-3).
+- 커밋: 67fffa8 (DamageCalculator + EditMode 테스트), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 4단계-3 (FSM/Monster 에 DamageCalculator + StatContainer 배선 + 데미지 텍스트,
+  플레이모드 스크린샷). 완료 시 DESIGN 9장 체크리스트 3번 충족.
 
 ### 2026-09-07 바퀴 #13
 - 한 일: 4단계-1 슬라이스 — 레이어드 스탯 + Dirty Flag. `Assets/Scripts/Stats/` 신규 3파일
