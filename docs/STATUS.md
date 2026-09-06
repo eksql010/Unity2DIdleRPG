@@ -5,16 +5,19 @@
 
 ## 다음 할 일
 
-**MVP(1~4단계) 완료. 현재는 INBOX 지시(2026-09-07 05:26, 4항목) 처리 중.**
+**MVP(1~4단계) 완료. INBOX(2026-09-07 05:26) 슬라이스 A·B 완료. 다음은 슬라이스 C(몬스터 체력바).**
 
 ### INBOX 2026-09-07 05:26 — 슬라이스 분할 (한 바퀴에 하나씩)
 - [x] **A. 레벨 재설계 (INBOX 1 + 3)** — 전 플랫폼 원웨이 통일 + 점프 도달범위 기준 다층 배치 +
   구성/길이 다양화. 바퀴 #17 완료. 커밋 5e602a5.
-- [ ] **B. 플랫폼별 몬스터 스폰 + 리스폰 (INBOX 2)** — 공중 플랫폼 포함 모든 플랫폼에 스폰 지점
-  1개 이상, 처치 후 동일 위치에서 Inspector 조정 딜레이(기본 5s) 뒤 리스폰, 대기 중 중첩 방지,
-  새 레이아웃에서 FSM 이 점프/드롭다운으로 몬스터 찾아 처치하는지 검증.
-  · MonsterSpawner 는 이미 respawnDelay(Inspector) + 스폰지점당 1마리 + 중첩방지 로직 있음
-    (3단계-1). 남은 일은 Game.unity 스폰 지점을 6개 플랫폼 + 지면 위로 재배치 + FSM 다층 검증.
+- [x] **B. 플랫폼별 몬스터 스폰 + 리스폰 (INBOX 2)** — 바퀴 #18 완료. 커밋 2d845dc.
+  · MonsterSpawner 를 "스폰 지점 = 슬롯" 구조로 재구성: 슬롯당 최대 1마리, 사망 시 그 슬롯이
+    respawnDelay(기본 5s, Inspector) 동안 비어 있다가 **같은 자리**에서 리스폰(중첩 스폰 없음),
+    지점별 타이머 독립. 스폰 지점 없으면 구버전 흩뿌리기(maxAlive 슬롯) 유지.
+  · Game.unity 스폰 지점 4개(전부 지면) → 8개로 재배치: 6개 원웨이 플랫폼 위 + 지면 좌우 2개.
+    maxAlive 8 / respawnDelay 5 / prewarm 8.
+  · 플레이모드 검증: FSM 이 지면↔L1↔L2↔L3, 지면↔R1↔R2↔R3 를 점프/드롭다운으로 오르내리며
+    처치(kills 14+), pool 8 고정, 죽은 슬롯이 5s 뒤 동일 좌표에서 부활. 스크린샷 확인.
 - [ ] **C. 몬스터 체력바 (INBOX 4)** — 현재 몬스터 HP 바 UI 가 **아예 없다**(코드베이스 확인).
   지시는 "줄어드는 방향 수정"이지만 실제로는 신규 구현이 필요. 좌측 고정(pivot/anchor 0,0.5)
   fill 방식으로 몬스터 위 월드 스페이스 바를 새로 만들 것. DamageTextSpawner 와 유사하게
@@ -164,14 +167,52 @@
   **모든 플랫폼을 원웨이로 통일**해서 해소됨(아래→위는 항상 통과). 층간 간격은 캐릭터 높이
   1.6 을 고려해 top-to-top 1.9u 이상으로 벌림(그보다 좁으면 원웨이여도 상단 플랫폼 옆면/모서리에
   점프가 걸림 — Physics2D 시뮬로 확인). 위 "레벨 레이아웃" 절 참고.
-- 스폰 지점은 아직 전부 지면 높이(y -2.85). 슬라이스 B 에서 6개 플랫폼 위로 재배치 예정.
-  그 전까지는 FSM 이 Jump()/DropDown() 을 거의 호출하지 않는다(전부 같은 층).
+- (해결·바퀴 #18) 스폰 지점을 6개 플랫폼 + 지면 좌우 8개로 재배치. 플레이모드에서 FSM 이
+  좌/우 타워를 점프·드롭다운으로 전부 오르내리며 처치 확인. 다층 순회 정상.
 - 3단계-2b 관찰: FSM 이 좌측 클러스터에 오래 머문다 — 리스폰이 그쪽에서 먼저 차서
   항상 최근접이 됨. 순회 자체는 정상.
+- 바퀴 #18 관찰: 스크린샷 촬영 시 MCP ScreenshotUtility 에서 "PlayerLoop ... recursively" Error
+  1건이 뜬다(플레이모드 중 촬영). 게임 코드와 무관(com.coplaydev.unity-mcp 내부).
 
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #18
+- 한 일: INBOX(05:26) 슬라이스 B — 플랫폼별 몬스터 스폰 + 동일 위치 리스폰(INBOX 항목 2).
+  · `MonsterSpawner` 재구성: 내부에 스폰 지점마다 `Slot`(Point / Monster / Cooldown) 1개.
+    슬롯당 최대 1마리. 몬스터 사망 → `HandleMonsterDied` 가 그 슬롯의 Monster 를 비우고
+    Cooldown = respawnDelay 로 설정. `TickRespawn(dt)` 이 비어 있는 슬롯의 Cooldown 만 깎고,
+    지연이 끝난 슬롯을 **같은 좌표**에서 다시 채운다(`SpawnInSlot`). 지점별 타이머가 독립이라
+    여러 마리가 시차를 두고 부활한다. `FillToCapacity`/`SpawnOne` 은 Cooldown>0 인 슬롯을
+    건너뛴다(리스폰 대기 중 중첩 스폰 없음). 스폰 지점이 없으면 구버전처럼 `maxAlive` 개의
+    흩뿌리기 슬롯을 만들어 기존 동작 유지. `respawnDelay` 필드 기본값 3→5(INBOX 예시값).
+    `MaxAlive` = 슬롯 수. `PendingRespawnCount` 프로퍼티 신설(테스트/검증용).
+  · Game.unity: `MonsterSpawner` 자식 스폰 지점 4개(전부 지면) 제거 → 8개 생성.
+    지면 좌우 2개(x ±9, y -2.85) + 6개 원웨이 플랫폼 위 각 1개
+    (L1 -8/-0.95, L2 -6/1.05, L3 -4.5/3.05, R1 7/-1.35, R2 8/0.70, R3 6.5/2.70 — 각 top+0.4).
+    maxAlive 8 / respawnDelay 5 / prewarm 8 / spawnOnStart true. SerializedObject 로 배선 후 저장.
+- 확인한 것: EditMode 65/65(무변화), PlayMode 69/69(MonsterSpawnerTests 15→19).
+  신규 4종: 스폰 지점마다 1마리씩 채움 / 사망 후 지연 뒤 같은 좌표 리스폰(풀 재사용) /
+  리스폰 대기 중 그 지점 재충전 안 함(FillToCapacity·SpawnOne 모두) / 지점별 타이머 독립.
+  콘솔: NoSubscription(Unity AI) + TestFramework 내부 NRE + ScreenshotUtility PlayerLoop 재귀 —
+  전부 게임 코드 무관. 게임플레이/CS 에러 0.
+  플레이모드(에디터 포커스, frame ~6천): spawnOnStart 로 8개 슬롯 전부 채워짐(alive 8/8).
+  FSM 이 지면에서 시작해 좌측 타워 L1→L2→L3 로 점프해 올라가 각 몬스터 처치, 다시 드롭다운으로
+  지면·아래층으로 내려옴. 이어서 우측 타워 R1~R3 도 동일하게 순회(player 가 x -9~9, y -2.85~3 을
+  왕복). kills 가 2→7→9→14 로 증가하는데 pool 은 8 고정(기획서 4.4 풀링). 죽은 슬롯 2개가
+  5초 뒤 정확히 원좌표(예: (-8.00,-0.95))에서 hp 만땅으로 부활, pending 카운트가 2→0.
+  스크린샷 직접 확인:
+  · `Assets/Screenshots/spawn_inbox2_sliceB.png` — 진입 직후(오프라인 보상 팝업 떠 있음).
+  · `Assets/Screenshots/spawn_inbox2_sliceB_combat.png` — 팝업 닫은 전투 화면. 좌측 시안 3단
+    계단(L1/L2/L3) 위에 빨간 몬스터가 각각 1마리, 노란 플레이어가 L1 위 몬스터 옆, 녹색 지면
+    위에도 빨간 몬스터 1마리. 모든 플랫폼에 몬스터가 있는 것 확인.
+- 커밋: 2d845dc (MonsterSpawner + PlayMode 테스트 + Game.unity). STATUS 갱신은 별도 커밋.
+  ProjectSettings/Physics2DSettings·ProjectSettings.asset 의 재직렬화는 이번 작업 무관이라 제외.
+- 다음 할 일: 슬라이스 C (INBOX 4) — 몬스터 체력바. 현재 HP 바 UI 자체가 없으므로 신규 구현.
+  좌측 고정(pivot/anchor 0,0.5) fill 방식 월드 스페이스 바를 몬스터 위에. DamageTextSpawner 처럼
+  `AutoBattleFsm.MonsterDamaged` / `Monster` 이벤트 구독. 완료 후 슬라이스 D(항목 5): 남은 미처리
+  없으면 커밋·푸쉬까지 마치고 `loop/STOP` 파일 생성.
 
 ### 2026-09-07 바퀴 #17
 - 한 일: INBOX(05:26) 슬라이스 A — 레벨 재설계(INBOX 항목 1 + 3). Game.unity 만 수정.
