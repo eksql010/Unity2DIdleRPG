@@ -5,12 +5,13 @@
 
 ## 다음 할 일
 
-**1단계(플레이어 컨트롤러 + 타일맵) 완료.** 이제 2단계로 진행.
+**1단계 완료. 2단계-1(오프라인 보상 계산) 완료.** 이제 2단계-2로 진행.
 
-2단계: 오프라인 방치 보상 (DESIGN.md 6장). 코드량 적고 독립적. 슬라이스 후보:
-- [ ] 2단계-1: OfflineRewardCalculator — 순수 계산 클래스(경과시간 → exp/gold),
-  최대 캡(8h), 시간 되돌리기 방어. EditMode 테스트로 검증(씬 불필요).
+2단계: 오프라인 방치 보상 (DESIGN.md 6장). 코드량 적고 독립적. 슬라이스:
+- [x] 2단계-1: OfflineRewardCalculator — 순수 계산 클래스(경과시간 → exp/gold),
+  최대 캡(8h), 시간 되돌리기 방어. EditMode 테스트로 검증.  → 커밋 eb7f4f4
 - [ ] 2단계-2: 종료시각 저장/복원 (PlayerPrefs 또는 JSON), 재접속 시 계산 호출.
+  OfflineRewardCalculator 를 감싸는 서비스 계층 + 저장소. UTC 기준으로 저장할 것.
 - [ ] 2단계-3: 보상 팝업 UI + Login/Logout 토글 버튼(DESIGN 6.3), 플레이모드 스크린샷.
 
 그 다음: 3단계 자동전투 FSM → 4단계 스탯/데미지 파이프라인 (DESIGN.md 8장 순서)
@@ -32,6 +33,22 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #6
+- 한 일: 2단계-1 슬라이스 — `Assets/Scripts/Offline/OfflineRewardCalculator.cs` 신규.
+  MonoBehaviour 아님, DateTime(lastSeen, now) 를 인자로 받는 순수 계산 클래스.
+  `Calculate` → `OfflineRewardResult{ elapsedSeconds, rawElapsedSeconds, gainedExp,
+  gainedGold, capped, rejected }`. 공식(기획서 6.1): (killsPerMinute/60) × 경과초 ×
+  expPerKill/goldPerKill, 정수 내림. 캡(기획서 6.2): 기본 8h(28800s) 초과 시 캡 값으로
+  절단 + capped=true. 시간 되돌리기 방어: now<=lastSeen 이면 rejected=true, 보상 0.
+  생성자에서 음수 설정값은 0 으로, 캡 인자 0 이하는 기본 8h 로 클램프.
+- 확인한 것: EditMode 테스트 `Assets/Tests/EditMode/OfflineRewardCalculatorTests.cs`
+  9종 신설(비례 지급 / 2배 시간→2배 보상 / 캡 절단 / 캡 경계 직전 / 과거 시각 rejected /
+  경과 0 / 정수 내림 / 음수 설정값 방어 / 캡 인자 0→기본값). EditMode asmdef 신규
+  (`Game.Tests.EditMode`, Editor 전용). EditMode 9/9 + 기존 PlayMode 14/14 통과.
+  콘솔 CS 에러 0 (RelayService 경고는 무관). 화면 없는 순수 로직이라 스크린샷 불필요.
+- 커밋: eb7f4f4 (계산 클래스 + EditMode 테스트 + asmdef), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 2단계-2 (종료시각 저장/복원 + 재접속 시 계산 호출, UTC 기준).
 
 ### 2026-09-07 바퀴 #5
 - 한 일: 1단계-5 슬라이스 — 카메라 추적. `Assets/Scripts/Camera/CameraFollow.cs`
