@@ -111,3 +111,7 @@ InitTestScene*.unity*
 # 루프 정지 신호 파일 (로컬 상태).
 /loop/STOP
 
+
+# Loop QA screenshots (local only)
+/[Aa]ssets/[Ss]creenshots/
+/[Aa]ssets/[Ss]creenshots.meta
