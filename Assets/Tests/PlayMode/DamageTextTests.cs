@@ -85,6 +85,12 @@ public class DamageTextTests
             if (go != null) Object.Destroy(go);
         }
         _spawned.Clear();
+
+        // 스포너가 부모 없이 만든 데미지 텍스트도 정리한다.
+        foreach (var dt in Object.FindObjectsByType<DamageText>(FindObjectsSortMode.None))
+        {
+            if (dt != null) Object.Destroy(dt.gameObject);
+        }
     }
 
     // ------------------------------------------------------------------

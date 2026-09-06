@@ -135,8 +135,8 @@ public class DamageTextSpawner : MonoBehaviour
 
     private DamageText CreateDamageText()
     {
+        // 부모를 두지 않는다 — Player 처럼 비균일 스케일인 오브젝트에 붙이면 숫자가 늘어난다.
         var go = new GameObject("DamageText");
-        go.transform.SetParent(transform, false);
 
         var text = go.AddComponent<DamageText>();
         text.SetFont(font != null ? font : BuiltinFont());
