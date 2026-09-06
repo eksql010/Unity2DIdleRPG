@@ -8,7 +8,7 @@
 1단계(플레이어 컨트롤러 + 타일맵)를 슬라이스로 쪼갬. 위에서부터 하나씩:
 
 - [x] 1단계-1: PlayerMovement 이동 API (좌우/점프/드롭다운) + PlayMode 테스트  → 커밋 05520f4
-- [ ] 1단계-2: PlayerInputHandler (새 Input System → PlayerMovement API 호출). InputSystem_Actions 의 Player 맵 Move/Jump 사용
+- [x] 1단계-2: PlayerInputHandler (새 Input System → IPlayerMotor API 호출). InputSystem_Actions 의 Player 맵 Move/Jump 사용  → 커밋 9ae7298
 - [ ] 1단계-3: 플레이 가능한 Game 씬 — 바닥 + 플레이어(스프라이트/Rigidbody2D/Collider/groundCheck) 배치, 플레이모드로 실행해 스크린샷 확인
 - [ ] 1단계-4: 타일맵 레벨 — 기본 지형 + 공중 일반 발판 2~3개 + 원웨이 플랫폼(PlatformEffector2D). `[바닥]-[원웨이]-[공중발판]-[원웨이]-[바닥]` 구성
 - [ ] 1단계-5: 카메라 추적(간단한 X축 제한 또는 Confiner)
@@ -30,6 +30,22 @@
 - 커밋:
 - 다음 할 일:
 -->
+
+### 2026-09-07 바퀴 #2
+- 한 일: 1단계-2 슬라이스 — 수동 입력을 이동 API 로 번역하는 계층.
+  `Assets/Scripts/Player/IPlayerMotor.cs`(MoveHorizontal/Jump/DropDown 계약),
+  `PlayerMovement` 가 이 인터페이스를 구현하도록 수정,
+  `Assets/Scripts/Player/PlayerInputHandler.cs` 신규 — InputSystem_Actions 의 Player 맵에서
+  Move(Vector2)/Jump(Button) 을 읽어 IPlayerMotor 호출. Jump 시점에 Move.y < -0.5(아래 누름)면
+  DropDown, 아니면 Jump 로 분기(기획서 2.3). inputActions 는 SerializeField 로 애셋 주입.
+  자동전투 FSM 은 이 핸들러를 거치지 않고 같은 IPlayerMotor 를 직접 호출하는 구조(기획서 2.4).
+- 확인한 것: PlayMode 테스트 `Assets/Tests/PlayMode/PlayerInputHandlerTests.cs` 3종 신규
+  (우이동→MoveHorizontal 양수 & 키 뗌→0, Space→Jump 1회·DropDown 0, 아래+Space→DropDown 1회·Jump 0),
+  InputTestFixture 로 가상 키보드 구동. 기존 5종 포함 PlayMode 8/8 통과. 콘솔 CS 에러 0
+  (NoSubscription 등 Unity AI 경고는 이번 작업과 무관). 화면 있는 씬은 1단계-3에서.
+  test asmdef 에 `Unity.InputSystem.TestFramework` 참조 추가.
+- 커밋: 9ae7298 (인터페이스+핸들러+테스트), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 1단계-3 (플레이 가능한 Game 씬 — 바닥+플레이어 배치, 플레이모드 스크린샷 확인).
 
 ### 2026-09-07 바퀴 #1
 - 한 일: 빈 프로젝트(loop 브랜치)에서 시작. 기획서 2장 이동 로직의 첫 슬라이스 구현 —
