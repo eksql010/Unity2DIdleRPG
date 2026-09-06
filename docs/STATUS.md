@@ -5,16 +5,20 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계 전부 완료. 3단계-1 완료(스포너/몬스터/풀).** 다음은 3단계-2 FSM.
+**1단계 완료. 2단계 전부 완료. 3단계-1 완료. 3단계-2a 완료(FSM 로직 + 테스트).**
+다음은 3단계-2b: Game.unity 에 스포너 배치 + 플레이모드 스크린샷.
 
 3단계: 자동전투 상태머신 (DESIGN.md 4장). Idle→Move→Attack→Loot→Idle 순환.
 2.4 의 IPlayerMotor(MoveHorizontal/Jump/DropDown)를 그대로 호출. 슬라이스:
 - [x] 3단계-1: 몬스터 스포너 + MonsterData + Monster(HP만) + MonsterPool.  → 커밋 9c60a36
-- [ ] 3단계-2: AutoBattleFsm — Idle(MonsterSpawner.GetNearestAliveMonster 로 타겟)→Move
-  (IPlayerMotor 로 접근, 위=점프/아래 원웨이=드롭다운 휴리스틱, DESIGN 4.3)→Attack(사거리 진입 시).
-  이때 Game.unity 에 MonsterSpawner GameObject + 스폰 지점을 배치하고 플레이모드 스크린샷으로
-  몬스터가 화면에 뜨는지 확인(3단계-1 은 화면 배선 없이 로직만 만들었으므로 여기서 눈으로 봄).
-- [ ] 3단계-3: Loot(처치 후 골드/exp 획득) + 플레이모드에서 실제로 순환 도는지 스크린샷.
+- [x] 3단계-2a: AutoBattleFsm — Idle(GetNearestAliveMonster 로 타겟)→Move(IPlayerMotor 로 접근,
+  위=Jump/아래=DropDown 휴리스틱 DESIGN 4.3)→Attack(사거리 진입 시 attackInterval 주기 TakeDamage)
+  →Loot(통과 상태, 처치 수만 집계)→Idle. Tick(dt) 주입식, PlayMode 10종.  → 커밋 30f22a5
+- [ ] 3단계-2b: Game.unity 의 Player 에 AutoBattleFsm 부착 + MonsterSpawner GameObject + 스폰 지점
+  배치. PlayerInputHandler 와 AutoBattleFsm 이 같은 PlayerMovement(IPlayerMotor)를 공유하는지 확인.
+  플레이모드 스크린샷으로 몬스터 렌더 + 플레이어가 몬스터로 이동/공격하는지 눈으로 확인.
+  (3단계-1/-2a 는 화면 배선 없이 로직만 만들었으므로 여기서 처음 눈으로 봄.)
+- [ ] 3단계-3: Loot 에서 골드/exp 실제 지급 + 플레이모드에서 순환 도는지 스크린샷.
 그 다음: 4단계 스탯/데미지 파이프라인 (5장) — 3단계 Attack 에서 사용.
 
 ### 3단계 슬라이스
@@ -59,8 +63,10 @@
 
 ## 알려진 문제 / 막힌 것
 
-- 3단계-1 은 화면 배선이 없다(스포너가 어느 씬에도 안 붙음). 3단계-2 에서 Game.unity 에
-  MonsterSpawner + 스폰 지점을 놓고 플레이모드 스크린샷으로 몬스터 렌더를 확인할 것.
+- 3단계-1/-2a 는 화면 배선이 없다(스포너·FSM 이 어느 씬에도 안 붙음). 3단계-2b 에서 Game.unity 에
+  MonsterSpawner + 스폰 지점 + Player 에 AutoBattleFsm 을 놓고 플레이모드 스크린샷으로 확인할 것.
+- AutoBattleFsm 은 Jump()/DropDown() 을 조건 없이 호출한다(성립 여부는 PlayerMovement 가 판단).
+  2b 에서 실제 다층 이동이 필요하면 레벨에 상단 발판 추가 문제(아래 항목)와 함께 볼 것.
 - 레벨은 지면↔발판 1층 구조뿐(상/하 이동은 점프 1회 + 드롭다운 1회로 커버). 3단계
   자동전투 FSM 에서 다층 경로가 필요해지면 상단 발판을 추가할 것. (이번 바퀴에 상단
   발판을 시도했으나, 캐릭터 높이 1.6 + 발판 간격 ~2u 라 아래 발판이 위 발판으로의
@@ -69,6 +75,29 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #10
+- 한 일: 3단계-2a 슬라이스 — `Assets/Scripts/Combat/AutoBattleFsm.cs` 신규(MonoBehaviour).
+  상태 enum Idle/Move/Attack/Loot. `Tick(float dt)` 를 Update 가 호출하고 테스트는 직접 주입.
+  · Idle: `spawner.GetNearestAliveMonster(transform.position)` 로 타겟 → 있으면 Move.
+  · Move: 타겟과 수평 거리 > horizontalStopDistance 면 그쪽으로 `MoveHorizontal(±1)`, 사거리
+    안이면 정지 후 Attack. 타겟이 verticalThreshold 이상 위면 `Jump()`, 이상 아래면 `DropDown()`
+    — 조건 없이 호출만 하고 성립 판정은 PlayerMovement 에 위임(수동 입력과 동일 방식, DESIGN 2.4).
+  · Attack: 사거리*1.25 밖이면 Move 로 복귀, 아니면 정지 후 attackInterval 주기로
+    `Monster.TakeDamage(attackDamage)`(고정값 — 4단계에서 스탯 파이프라인으로 대체).
+  · Loot: 프레임에 머무르지 않는 통과 상태. 진입 시 KillCount++ 와 `MonsterKilled` 이벤트
+    (3단계-3 보상 지급이 소비), 그 Tick 안에서 곧바로 Idle 로 돌아가 다음 타겟 탐색.
+  타겟이 죽거나(우리 공격이든 외부든) 풀 반납되면 Tick 서두에서 감지해 Loot 경유 복귀.
+  `Configure(IPlayerMotor, MonsterSpawner)` / `Tune(range, interval, damage, vThreshold)` 주입식.
+- 확인한 것: PlayMode 테스트 `Assets/Tests/PlayMode/AutoBattleFsmTests.cs` 10종 신설 —
+  가짜 IPlayerMotor(이동 기록) + 실제 MonsterSpawner/Monster. (Idle 타겟팅·무몬스터 정지 /
+  Move 수평방향·위Jump·아래DropDown·사거리진입 Attack전이 / Attack 주기 데미지·처치 시
+  KillCount·이벤트·Idle복귀·사거리이탈 재추격 / 타겟 소멸 시 크래시 없이 복귀 / 의존성 없으면 무동작).
+  EditMode 25/25, PlayMode 39/39(기존 29 + 신규 10) 통과. 콘솔 CS 에러 0
+  (TestResults.xml 저장 로그 / connection.state_change 는 무관).
+  화면 배선은 이 슬라이스 밖 → 스크린샷은 3단계-2b 로 분리(3단계-1 이 스크린샷을 미룬 것과 동일).
+- 커밋: 30f22a5 (AutoBattleFsm + PlayMode 테스트), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 3단계-2b (Game.unity 에 AutoBattleFsm + MonsterSpawner 배치, 플레이모드 스크린샷).
 
 ### 2026-09-07 바퀴 #9
 - 한 일: 3단계-1 슬라이스 — `Assets/Scripts/Combat/` 신규(MonsterData / Monster / MonsterPool /
