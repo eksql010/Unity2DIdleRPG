@@ -5,16 +5,38 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계 전부 완료(2-1·2-2·2-3).** 이제 3단계 자동전투 FSM 으로 진행.
+**1단계 완료. 2단계 전부 완료. 3단계-1 완료(스포너/몬스터/풀).** 다음은 3단계-2 FSM.
 
 3단계: 자동전투 상태머신 (DESIGN.md 4장). Idle→Move→Attack→Loot→Idle 순환.
-2.4 의 IPlayerMotor(MoveHorizontal/Jump/DropDown)를 그대로 호출. 슬라이스 제안:
-- [ ] 3단계-1: 몬스터 스포너 + MonsterData/몬스터 오브젝트(HP만) + Object Pool.
-  스포너가 살아있는 몬스터 리스트를 관리(FindObjectsOfType 매프레임 금지, DESIGN 4.2/4.4).
-- [ ] 3단계-2: AutoBattleFsm — Idle(가장 가까운 살아있는 몬스터 탐색)→Move(IPlayerMotor
-  로 접근, 위=점프/아래 원웨이=드롭다운 휴리스틱, DESIGN 4.3)→Attack(사거리 진입 시).
+2.4 의 IPlayerMotor(MoveHorizontal/Jump/DropDown)를 그대로 호출. 슬라이스:
+- [x] 3단계-1: 몬스터 스포너 + MonsterData + Monster(HP만) + MonsterPool.  → 커밋 9c60a36
+- [ ] 3단계-2: AutoBattleFsm — Idle(MonsterSpawner.GetNearestAliveMonster 로 타겟)→Move
+  (IPlayerMotor 로 접근, 위=점프/아래 원웨이=드롭다운 휴리스틱, DESIGN 4.3)→Attack(사거리 진입 시).
+  이때 Game.unity 에 MonsterSpawner GameObject + 스폰 지점을 배치하고 플레이모드 스크린샷으로
+  몬스터가 화면에 뜨는지 확인(3단계-1 은 화면 배선 없이 로직만 만들었으므로 여기서 눈으로 봄).
 - [ ] 3단계-3: Loot(처치 후 골드/exp 획득) + 플레이모드에서 실제로 순환 도는지 스크린샷.
 그 다음: 4단계 스탯/데미지 파이프라인 (5장) — 3단계 Attack 에서 사용.
+
+### 3단계 슬라이스
+- [x] 3단계-1: `Assets/Scripts/Combat/` 신규 4파일.
+  · `MonsterData` — 몬스터 1종 정적 데이터(monsterId/hp/attackPower/defense/expReward/goldReward),
+    `[Serializable]`, `Sanitized()` 로 음수 등 오입력 보정. (공격력/방어력은 4단계 전까지 미사용)
+  · `Monster` (MonoBehaviour) — HP만. `Spawn(data,pos)` 풀에서 꺼내 재사용, `TakeDamage(amount)`
+    (3단계는 방어력/크리티컬 보정 없이 그대로 차감 → 4단계에서 앞단에 데미지 공식 붙임),
+    사망 시 `Died` 이벤트 1회, `Despawn()` 로 비활성. 스스로 Destroy 안 함.
+  · `MonsterPool` — `Func<Monster>` 팩토리 주입 순수 클래스(프리팹 없이 테스트 가능).
+    prewarm/Rent/Return, 중복 반납 무시, TotalCreated/IdleCount 노출.
+  · `MonsterSpawner` (MonoBehaviour) — `AliveMonsters`(IReadOnlyList) 직접 관리(FindObjectsOfType
+    안 씀, DESIGN 4.2). 풀 재사용, 사망 시 리스트 제거 + 반납 + `respawnDelay` 후 보충
+    (`TickRespawn(dt)` 는 Update 가 호출, 테스트에서 직접 주입 가능). `GetNearestAliveMonster(from)`
+    = 가장 가까운 살아있는 몬스터(DESIGN 4.3 타겟 선정). 프리팹 없으면 빨간 사각형 플레이스홀더
+    (SpriteRenderer + isTrigger BoxCollider2D) 를 코드로 생성. `Configure()` 로 런타임 튜닝.
+  · PlayMode 테스트 `Assets/Tests/PlayMode/MonsterSpawnerTests.cs` 15종
+    (Monster 5: Spawn 초기화 / 체력차감·0클램프·Died 1회 / 0이하 무시 / 사망후 재사용 / 오입력 보정.
+     Pool 4: 재사용 시 재생성 안 함 / prewarm 비활성 대기 / 중복반납 무시 / null 팩토리 거부.
+     Spawner 6: FillToCapacity=maxAlive / SpawnOne 초과 시 null / 사망→리스트 제거·반납 /
+     지연 후 풀 재사용 리스폰(PoolSize 불변) / GetNearest 최근접 / 죽은놈 스킵·전멸 시 null).
+  → 커밋 9c60a36 (STATUS 갱신은 별도 커밋)
 
 ### 2단계 슬라이스 (전부 완료)
 - [x] 2단계-1: OfflineRewardCalculator — 순수 계산 클래스(경과시간 → exp/gold),
@@ -37,6 +59,8 @@
 
 ## 알려진 문제 / 막힌 것
 
+- 3단계-1 은 화면 배선이 없다(스포너가 어느 씬에도 안 붙음). 3단계-2 에서 Game.unity 에
+  MonsterSpawner + 스폰 지점을 놓고 플레이모드 스크린샷으로 몬스터 렌더를 확인할 것.
 - 레벨은 지면↔발판 1층 구조뿐(상/하 이동은 점프 1회 + 드롭다운 1회로 커버). 3단계
   자동전투 FSM 에서 다층 경로가 필요해지면 상단 발판을 추가할 것. (이번 바퀴에 상단
   발판을 시도했으나, 캐릭터 높이 1.6 + 발판 간격 ~2u 라 아래 발판이 위 발판으로의
@@ -45,6 +69,22 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #9
+- 한 일: 3단계-1 슬라이스 — `Assets/Scripts/Combat/` 신규(MonsterData / Monster / MonsterPool /
+  MonsterSpawner). 몬스터는 HP만 가지며 스스로 Destroy 하지 않고 풀로 재사용된다. 스포너는
+  살아있는 몬스터를 `AliveMonsters` 리스트로 직접 들고 있어 FindObjectsOfType 매프레임 탐색이
+  필요 없다(DESIGN 4.2/4.4). 사망 시 리스트 제거→풀 반납→`respawnDelay` 후 보충. 타겟 선정
+  `GetNearestAliveMonster(from)` 제공(3단계-2 Move 상태용). 프리팹 없으면 빨간 사각형
+  플레이스홀더를 코드로 생성. 자세한 내용은 위 "3단계 슬라이스" 참고.
+- 확인한 것: PlayMode 테스트 `MonsterSpawnerTests.cs` 15종 신설 — EditMode 25/25,
+  PlayMode 29/29(기존 14 + 신규 15) 통과. 콘솔 CS 에러 0 (RelayService 경고는 무관).
+  화면 배선(씬에 스포너 배치)은 이번 슬라이스 범위 밖 → 스크린샷은 3단계-2 로 미룸.
+  단 PlayMode 테스트가 실제 SpriteRenderer + BoxCollider2D 를 붙인 플레이스홀더 생성 경로를
+  타므로 오브젝트 구성 자체는 검증됨.
+- 커밋: 9c60a36 (Combat 4파일 + PlayMode 테스트), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 3단계-2 (AutoBattleFsm — Idle→Move→Attack, IPlayerMotor 활용) +
+  Game.unity 에 MonsterSpawner 배치 후 플레이모드 스크린샷.
 
 ### 2026-09-07 바퀴 #8
 - 한 일: 2단계-3 슬라이스 — `Assets/Scripts/Offline/OfflineRewardController.cs` 신규(MonoBehaviour).
