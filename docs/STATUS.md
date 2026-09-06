@@ -5,12 +5,26 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계 전부 완료. 3단계 전부 완료(3단계-1/2a/2b/3).**
-다음은 **4단계: 스탯/데미지 파이프라인 (DESIGN.md 5장)** — 레이어드 스탯(Flat/PercentAdd/
-PercentMultiply) + Dirty Flag + 데미지 공식((공격력-방어력)×크리티컬×기타%). 3단계 Attack 의
-고정 데미지(AutoBattleFsm.attackDamage) 와 Monster.TakeDamage 앞단을 이 파이프라인으로 교체.
-슬라이스 후보: 4단계-1 StatContainer/Modifier(순수, EditMode) → 4단계-2 DamageCalculator
-(크리티컬 판정 주입식, EditMode) → 4단계-3 FSM/Monster 배선 + 데미지 텍스트(플레이모드 스크린샷).
+**1단계 완료. 2단계 전부 완료. 3단계 전부 완료. 4단계-1 완료.**
+다음은 **4단계-2: DamageCalculator** — 데미지 공식 `(공격력 - 방어력 보정치) × 크리티컬 배율
+(발동 시 1.5배) × 기타 % 증가 배율` (DESIGN 5.3). 크리티컬 발동 판정은 주입식(`Func<bool>` 또는
+`IRandom`)으로 빼서 EditMode 로 결정적 검증. 입력은 4단계-1 의 `StatContainer`(공격자/피격자).
+그 다음 **4단계-3**: `AutoBattleFsm.attackDamage`(고정값) 와 `Monster.TakeDamage` 앞단을
+DamageCalculator 로 교체 + 플레이어/몬스터에 StatContainer 부착 + 데미지 텍스트(플레이모드 스크린샷).
+
+### 4단계 슬라이스
+- [x] 4단계-1: `Assets/Scripts/Stats/` 신규 3파일 — 레이어드 스탯 + Dirty Flag.
+  · `StatModifier` — 불변 값 객체. `StatModifierType{Flat=100, PercentAdd=200, PercentMultiply=300}`,
+    `Value`/`Type`/`Source`(출처, 일괄 제거용). `StatModifier.Flat/PercentAdd/PercentMultiply` 팩토리.
+    알 수 없는 종류는 생성자에서 ArgumentException.
+  · `Stat` — `BaseValue`(같은 값 재대입은 무시) + `List<StatModifier>` + `_isDirty`/`_cachedValue`.
+    `Value` getter 는 Dirty 일 때만 `CalculateFinalValue()` 하고 `RecalculationCount++`(테스트용).
+    적용 순서: 기본값 → Flat 합산 → PercentAdd 전부 합산 후 한 번 곱 → PercentMultiply 순차 곱.
+    `AddModifier`(null 거부)/`RemoveModifier`/`RemoveAllModifiersFromSource`/`ClearModifiers`.
+  · `StatContainer` — `StatType{AttackPower,Defense,MaxHP,CritRate,MoveSpeed}` (DESIGN 5.2 최소 세트).
+    5개 `Stat` 프로퍼티 + `Get(StatType)` + `ForMonster(MonsterData)`(5.4 재사용, Sanitize 경유).
+  · EditMode `Assets/Tests/EditMode/StatSystemTests.cs` 23종.
+  → 커밋 72f98b6 (STATUS 갱신은 별도 커밋)
 
 3단계: 자동전투 상태머신 (DESIGN.md 4장). Idle→Move→Attack→Loot→Idle 순환.
 2.4 의 IPlayerMotor(MoveHorizontal/Jump/DropDown)를 그대로 호출. 슬라이스:
@@ -89,6 +103,26 @@ PercentMultiply) + Dirty Flag + 데미지 공식((공격력-방어력)×크리�
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #13
+- 한 일: 4단계-1 슬라이스 — 레이어드 스탯 + Dirty Flag. `Assets/Scripts/Stats/` 신규 3파일
+  (`StatModifier` / `Stat` / `StatContainer`). 순수 클래스라 씬/플레이모드 불필요.
+  Dirty Flag: `BaseValue` 변경·수정자 추가/제거 시에만 `_isDirty=true`, `Value` getter 가
+  Dirty 일 때만 재계산(기획서 5.1 "매 프레임 재계산 금지"). 같은 값 재대입/없는 수정자 제거는
+  Dirty 로 만들지 않음. 적용 순서 Flat → PercentAdd(합산 후 1회 곱) → PercentMultiply(순차 곱).
+  출처(Source)로 수정자 일괄 제거 지원(버프/장비 해제). `StatContainer.ForMonster(MonsterData)`
+  로 플레이어/몬스터가 같은 시스템 재사용(5.4). 자세한 내용은 위 "4단계 슬라이스" 참고.
+  DamageCalculator·FSM 배선은 이 슬라이스 밖(4단계-2/3).
+- 확인한 것: EditMode 48/48(기존 25 + StatSystemTests 23), PlayMode 47/47(무수정 통과).
+  콘솔 CS/게임플레이 에러 0 (TestResults.xml 저장 로그 / connection.state_change 는 무관).
+  신규 23종: 기본값/Flat/PercentAdd 합산/PercentMultiply 순차/3종 혼합 순서,
+  Dirty Flag 5종(반복 읽기 재계산 안 함 / BaseValue 변경 시 1회 / 동일 값 무시 / 수정자 추가 시 /
+  없는 수정자 제거는 Dirty 아님), 수정자 제거 5종(인스턴스/출처 일괄/ClearModifiers/없는 출처 false),
+  방어 3종(null 수정자 거부 / 미정의 종류 거부 / Modifiers 읽기전용), StatContainer 6종
+  (5개 초기화 / Get / ForMonster 이관·Sanitize·null / 이동속도 버프 부착·제거 왕복).
+  화면 없는 순수 로직이라 스크린샷 불필요(스크린샷은 4단계-3).
+- 커밋: 72f98b6 (Stats 3파일 + EditMode 테스트), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 4단계-2 (DamageCalculator — 데미지 공식 5.3, 크리티컬 판정 주입식, EditMode).
 
 ### 2026-09-07 바퀴 #12
 - 한 일: 3단계-3 슬라이스 — Loot 단계 보상 지급. 신규 3파일.
