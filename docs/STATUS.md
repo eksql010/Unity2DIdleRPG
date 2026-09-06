@@ -10,14 +10,17 @@
 - [x] 1단계-1: PlayerMovement 이동 API (좌우/점프/드롭다운) + PlayMode 테스트  → 커밋 05520f4
 - [x] 1단계-2: PlayerInputHandler (새 Input System → IPlayerMotor API 호출). InputSystem_Actions 의 Player 맵 Move/Jump 사용  → 커밋 9ae7298
 - [x] 1단계-3: 플레이 가능한 Game 씬 — 바닥 + 플레이어(스프라이트/Rigidbody2D/Collider/groundCheck) 배치, 플레이모드로 실행해 스크린샷 확인  → 커밋 52a1516
-- [ ] 1단계-4: 타일맵 레벨 — 기본 지형 + 공중 일반 발판 2~3개 + 원웨이 플랫폼(PlatformEffector2D). `[바닥]-[원웨이]-[공중발판]-[원웨이]-[바닥]` 구성
+- [x] 1단계-4: 레벨 레이아웃 — 바닥 + 원웨이 발판 A/B(PlatformEffector2D) + 일반 공중발판 1개. `[바닥]-[원웨이A]-[공중발판]-[원웨이B]-[바닥]` 구성  → 커밋 e89f2ab
 - [ ] 1단계-5: 카메라 추적(간단한 X축 제한 또는 Confiner)
 
 그 다음: 2단계 오프라인 방치 보상 → 3단계 자동전투 FSM → 4단계 스탯/데미지 파이프라인 (DESIGN.md 8장 순서)
 
 ## 알려진 문제 / 막힌 것
 
-- (없음)
+- 레벨은 지면↔발판 1층 구조뿐(상/하 이동은 점프 1회 + 드롭다운 1회로 커버). 3단계
+  자동전투 FSM 에서 다층 경로가 필요해지면 상단 발판을 추가할 것. (이번 바퀴에 상단
+  발판을 시도했으나, 캐릭터 높이 1.6 + 발판 간격 ~2u 라 아래 발판이 위 발판으로의
+  점프를 막아 제거함. 추가하려면 수평 오프셋을 두거나 위 발판도 원웨이로 만들 것.)
 
 ---
 
@@ -30,6 +33,28 @@
 - 커밋:
 - 다음 할 일:
 -->
+
+### 2026-09-07 바퀴 #4
+- 한 일: 1단계-4 슬라이스 — Game.unity 에 레벨 레이아웃 추가. `Level` 부모 아래
+  OneWayPlatform_A(-6,-1.2) / AirPlatform(0,-1.2) / OneWayPlatform_B(6,-1.2), 셋 다
+  worldSize (4, 0.3). A·B 는 OneWayPlatform 레이어 + PlatformEffector2D(useOneWay) +
+  BoxCollider2D.usedByEffector, AirPlatform 은 Ground 레이어 일반 발판(양면 충돌).
+  플레이스홀더 스프라이트 white.png, 원웨이=시안 / 일반=회색. 발판 간격 2u(점프로 건너뜀).
+  Player 씬 인스턴스 jumpForce 8→13 (지면 top -3.25 에서 발판 top -1.05 로 오르려면 필요.
+  apex ≈ 13²/(2·9.81·3) ≈ 2.87u. PlayMode 테스트는 자체 주입값이라 무관).
+  execute_code(C#) 로 결정적 생성 후 씬 저장.
+- 확인한 것: 플레이모드 + Physics2D.simulationMode=Script 로 수동 검증
+  (주의: Physics2D.Simulate 는 MonoBehaviour.FixedUpdate 를 호출하지 않으므로
+  PlayerMovement 로직 대신 rb 속도를 직접 넣어 지오메트리만 검증).
+  · 지면 x=-6 에서 점프(v=13) → peak y 0.31, 원웨이 발판 A 위 안착(중심 y -0.24 ≈ 기대 -0.25).
+    아래→위 원웨이 통과 후 착지 확인.
+  · 발판 A 위에서 드롭다운(콜라이더 무시 + 아래 속도) → y -0.24 → -2.44, 지면으로 낙하.
+  · 지면에서 x=-10 → 5.25 까지 이동, 발판 아래로 끼임 없이 통행(y -2.44 유지).
+  스크린샷 `Assets/Screenshots/level_1-4.png` 직접 확인 — 지면 위 플레이어, 그 위로
+  시안-회색-시안 3발판이 한 줄로 배치됨. 콘솔 CS 에러 0 (RelayService 경고는 무관).
+  EditMode 0/0, PlayMode 8/8 통과.
+- 커밋: e89f2ab (Game.unity), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 1단계-5 (카메라 추적 — 플레이어 X 를 따라가되 스테이지 경계에서 X축 제한).
 
 ### 2026-09-07 바퀴 #3
 - 한 일: 1단계-3 슬라이스 — 플레이 가능한 Game 씬 최초 구성.
