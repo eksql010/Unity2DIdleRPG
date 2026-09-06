@@ -8,7 +8,7 @@ using UnityEngine;
 /// 즉 이 클래스는 "이동을 실제로 수행하는 쪽"이고, 누가 명령하는지는 알지 못한다. (기획서 2.4)
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
-public class PlayerMovement : MonoBehaviour
+public class PlayerMovement : MonoBehaviour, IPlayerMotor
 {
     [Header("이동")]
     [Tooltip("좌우 이동 속도 (units/sec). 가속 없이 즉시 이 속도로 전환된다.")]
