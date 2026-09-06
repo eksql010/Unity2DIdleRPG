@@ -9,7 +9,7 @@
 
 - [x] 1단계-1: PlayerMovement 이동 API (좌우/점프/드롭다운) + PlayMode 테스트  → 커밋 05520f4
 - [x] 1단계-2: PlayerInputHandler (새 Input System → IPlayerMotor API 호출). InputSystem_Actions 의 Player 맵 Move/Jump 사용  → 커밋 9ae7298
-- [ ] 1단계-3: 플레이 가능한 Game 씬 — 바닥 + 플레이어(스프라이트/Rigidbody2D/Collider/groundCheck) 배치, 플레이모드로 실행해 스크린샷 확인
+- [x] 1단계-3: 플레이 가능한 Game 씬 — 바닥 + 플레이어(스프라이트/Rigidbody2D/Collider/groundCheck) 배치, 플레이모드로 실행해 스크린샷 확인  → 커밋 52a1516
 - [ ] 1단계-4: 타일맵 레벨 — 기본 지형 + 공중 일반 발판 2~3개 + 원웨이 플랫폼(PlatformEffector2D). `[바닥]-[원웨이]-[공중발판]-[원웨이]-[바닥]` 구성
 - [ ] 1단계-5: 카메라 추적(간단한 X축 제한 또는 Confiner)
 
@@ -30,6 +30,24 @@
 - 커밋:
 - 다음 할 일:
 -->
+
+### 2026-09-07 바퀴 #3
+- 한 일: 1단계-3 슬라이스 — 플레이 가능한 Game 씬 최초 구성.
+  `Assets/Scenes/Game.unity` 신규(2D URP, 빌드 인덱스 0). Ground(SpriteRenderer+BoxCollider2D,
+  Ground 레이어, 폭 40u) + Player(SpriteRenderer + Rigidbody2D[회전잠금/Continuous/gravityScale 3]
+  + BoxCollider2D + 자식 GroundCheck) 배치. Player 에 PlayerMovement / PlayerInputHandler 부착하고
+  직렬화 필드 주입: groundCheck=자식 Transform, groundLayer=Ground|OneWayPlatform,
+  oneWayLayer=OneWayPlatform, inputActions=Assets/InputSystem_Actions.inputactions.
+  Global Light 2D + 정사영 카메라(size 5). 플레이스홀더 스프라이트 `Assets/Art/white.png`(4x4, PPU 4).
+  씬 구성은 execute_code(C#)로 결정적으로 생성. QA 스크린샷은 `Assets/Screenshots/`(gitignore).
+- 확인한 것: 플레이모드 진입 후 Physics2D 스크립트 시뮬레이션으로 프레임을 진행시켜
+  플레이어가 낙하 → 바닥에 안착(playerBottom -3.235 ≈ groundTop -3.25, vel 0). 스크린샷으로
+  플레이어가 바닥 위에 서 있고 지면이 화면 하단을 채우는 것 확인. 콘솔 CS 에러 0
+  (RelayService/NoSubscription 경고는 Unity AI 관련, 이번 작업 무관). PlayMode 8/8 통과.
+  주의: 에디터 비포커스 시 플레이모드 게임 루프가 거의 진행되지 않음 → 물리 검증은
+  Physics2D.simulationMode=Script + Simulate() 루프로 수동 진행해야 함.
+- 커밋: 52a1516 (씬+스프라이트+빌드세팅+gitignore), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 1단계-4 (타일맵 레벨 — 기본 지형 + 공중 일반 발판 2~3개 + 원웨이 플랫폼).
 
 ### 2026-09-07 바퀴 #2
 - 한 일: 1단계-2 슬라이스 — 수동 입력을 이동 API 로 번역하는 계층.
