@@ -104,3 +104,10 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# ── 자율 개발 루프 ──────────────────────────────────────────────
+# 루프 실행 로그 (날짜별). 산출물이 아니므로 커밋하지 않는다.
+/logs/
+# 루프 정지 신호 파일 (로컬 상태).
+/loop/STOP
+
