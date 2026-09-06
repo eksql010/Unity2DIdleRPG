@@ -1,4 +1,4 @@
-# loop/env.ps1
+﻿# loop/env.ps1
 # 자율 개발 루프 설정. loop.ps1 이 실행 시작 시 이 파일을 dot-source 한다.
 # 값만 바꾸면 되고, 로직은 loop.ps1 에 있다.
 

@@ -1,4 +1,4 @@
-# loop/loop.ps1
+﻿# loop/loop.ps1
 # 자율 개발 루프 본체.
 #
 # 핵심: 한 바퀴마다 헤드리스 세션을 "새로" 연다. 대화를 이어 붙이지 않는다.
@@ -9,6 +9,12 @@
 # loop/loopctl.ps1 로 작업 스케줄러에 등록해서 돌려라. (README.md 참고)
 
 $ErrorActionPreference = "Stop"
+
+# UTF-8 고정. PS 5.1 은 기본 파이프/콘솔 인코딩이 ASCII/ANSI 라
+# 한글이 물음표로 깨진다 (claude 출력 로그, 인자 전달 모두).
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding           = [System.Text.UTF8Encoding]::new($false)
+$env:PYTHONIOENCODING     = "utf-8"
 
 # ── 설정 로드 ──────────────────────────────────────────────────
 . (Join-Path $PSScriptRoot "env.ps1")
@@ -58,11 +64,14 @@ while ($true) {
     $roundLog = Join-Path $LOOP_LOGDIR ("loop_{0}.log" -f (Get-Date -Format "yyyy-MM-dd"))
     Write-Log "───── 바퀴 #$round 시작 ─────"
 
-    $prompt = Get-Content $LOOP_PROMPT -Raw
+    # 부트스트랩 프롬프트는 ASCII 로만. 실제 지시는 loop/PROMPT.md 에 있고,
+    # claude 가 자기 파일 도구로 (UTF-8 정확히) 읽는다.
+    # 프롬프트를 stdin 으로 파이프하면 PS 5.1 인코딩에서 한글이 깨지므로 인자로만 준다.
+    $bootstrap = "Read the file loop/PROMPT.md in this repository and do exactly what it says for one round, then stop."
 
     try {
         # 새 헤드리스 세션. --continue / --resume 를 쓰지 않으므로 매번 백지에서 시작한다.
-        $prompt | & claude -p `
+        & claude -p $bootstrap `
             --model $LOOP_MODEL `
             --max-turns $LOOP_MAX_TURNS `
             --permission-mode $LOOP_PERMISSION_MODE `

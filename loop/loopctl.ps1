@@ -1,4 +1,4 @@
-<#
+﻿<#
 loop/loopctl.ps1 — 자율 개발 루프 제어
 
   .\loop\loopctl.ps1 install     작업 스케줄러에 등록 (로그인 시 시작 / 비정상 종료 시 재시작)
