@@ -18,6 +18,12 @@ public class Monster : MonoBehaviour
     /// <summary>이 몬스터를 스폰할 때 사용된 데이터. Loot 단계에서 보상 계산에 쓰인다.</summary>
     public MonsterData Data { get; private set; }
 
+    /// <summary>
+    /// 이 몬스터의 레이어드 스탯(공격력/방어력/HP 등). <see cref="Spawn"/> 시 <see cref="Data"/> 로부터
+    /// 구성된다. 데미지 계산 파이프라인이 방어력을 읽는다. (기획서 5.4 — 플레이어와 같은 시스템 재사용)
+    /// </summary>
+    public StatContainer Stats { get; private set; }
+
     /// <summary>현재 체력.</summary>
     public float CurrentHp => currentHp;
 
@@ -36,6 +42,7 @@ public class Monster : MonoBehaviour
     public void Spawn(MonsterData data, Vector2 position)
     {
         Data = (data ?? new MonsterData()).Sanitized();
+        Stats = StatContainer.ForMonster(Data);
         MaxHp = Data.hp;
         currentHp = MaxHp;
         IsAlive = true;

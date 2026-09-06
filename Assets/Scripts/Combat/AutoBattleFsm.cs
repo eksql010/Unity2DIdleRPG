@@ -11,8 +11,10 @@ using UnityEngine;
 ///           타겟이 위에 있으면 Jump(), 아래에 있으면 DropDown() (기획서 4.3 단순 휴리스틱).
 ///           점프/드롭다운의 실제 성립 여부(접지·원웨이 판정)는 <see cref="PlayerMovement"/> 가 판단하므로
 ///           FSM 은 조건 없이 호출만 한다 — 수동 입력 핸들러와 완전히 같은 방식. (기획서 2.4)
-/// - Attack: 사거리 안이면 제자리 정지 후 <see cref="attackInterval"/> 주기로 <see cref="Monster.TakeDamage"/> 호출.
-///           (3단계에서는 고정 데미지. 레이어드 스탯 기반 데미지 공식은 4단계에서 이 앞단에 붙는다 — 기획서 5.3)
+/// - Attack: 사거리 안이면 제자리 정지 후 <see cref="attackInterval"/> 주기로 공격.
+///           데미지는 <see cref="DamageCalculator"/>(플레이어 <see cref="StatContainer"/> vs 몬스터 스탯,
+///           기획서 5.3 공식)로 계산해 <see cref="Monster.TakeDamage"/> 에 넘긴다.
+///           파이프라인이 배선되지 않았으면 <see cref="attackDamage"/> 고정값으로 폴백한다.
 /// - Loot:   처치 보상 획득. 3단계-2 범위에서는 처치 수만 세고 즉시 Idle 로 돌아간다.
 ///           골드/경험치 지급은 3단계-3.
 ///
@@ -44,8 +46,18 @@ public class AutoBattleFsm : MonoBehaviour
     [Tooltip("공격 1회 사이의 간격(초).")]
     [SerializeField] private float attackInterval = 0.6f;
 
-    [Tooltip("공격 1회의 데미지. (4단계에서 스탯 파이프라인 최종 공격력으로 대체)")]
+    [Tooltip("공격 1회의 데미지. 데미지 파이프라인(아래)이 배선되지 않았을 때만 쓰는 폴백 고정값.")]
     [SerializeField] private float attackDamage = 7f;
+
+    [Header("데미지 파이프라인 (기획서 5장)")]
+    [Tooltip("플레이어 기본 공격력. Awake 에서 이 값으로 StatContainer 를 만들어 데미지 공식에 넣는다.")]
+    [SerializeField] private float basePlayerAttackPower = 12f;
+
+    [Tooltip("플레이어 기본 크리티컬 확률(0~1). 공격마다 이 확률로 크리티컬(1.5배) 판정. (기획서 5.3)")]
+    [SerializeField] private float basePlayerCritRate = 0.2f;
+
+    [Tooltip("플레이어 기본 방어력(몬스터가 플레이어를 때릴 때 대비 — MVP 범위에선 표시용).")]
+    [SerializeField] private float basePlayerDefense = 3f;
 
     [Header("이동 튜닝")]
     [Tooltip("타겟과의 수평 거리가 이 값보다 크면 그쪽으로 걷는다(작으면 정지 — 좌우 떨림 방지).")]
@@ -59,6 +71,9 @@ public class AutoBattleFsm : MonoBehaviour
     private float _attackTimer;
     private int _killCount;
 
+    private StatContainer _playerStats;
+    private DamageCalculator _damageCalculator;
+
     /// <summary>현재 FSM 상태(인스펙터/테스트 확인용).</summary>
     public State CurrentState { get; private set; } = State.Idle;
 
@@ -71,11 +86,42 @@ public class AutoBattleFsm : MonoBehaviour
     /// <summary>몬스터를 처치한 순간 1회 발생. 인자는 방금 죽은 몬스터(보상 데이터 포함). 3단계-3 Loot 에서 소비.</summary>
     public event Action<Monster> MonsterKilled;
 
+    /// <summary>
+    /// 공격이 몬스터에 명중한 순간 발생. 인자는 (맞은 몬스터, 데미지 계산 결과).
+    /// 데미지 텍스트(4단계-3b) 가 이 이벤트를 구독해 몬스터 위에 숫자를 띄운다.
+    /// </summary>
+    public event Action<Monster, DamageResult> MonsterDamaged;
+
+    /// <summary>데미지 공식에 들어가는 플레이어 스탯. 파이프라인 미배선 시 null.</summary>
+    public StatContainer PlayerStats => _playerStats;
+
     private void Awake()
     {
         if (_motor == null)
         {
             _motor = playerMovement;
+        }
+
+        // 실제 씬 배선(playerMovement 가 인스펙터에서 주입됨)일 때만 데미지 파이프라인을
+        // 자동 구성한다. 테스트는 Configure()/ConfigureCombat() 로 명시 주입하므로 건드리지 않는다.
+        if (playerMovement != null)
+        {
+            EnsureCombatPipeline();
+        }
+    }
+
+    private void EnsureCombatPipeline()
+    {
+        if (_playerStats == null)
+        {
+            _playerStats = new StatContainer(
+                baseAttackPower: basePlayerAttackPower,
+                baseDefense: basePlayerDefense,
+                baseCritRate: basePlayerCritRate);
+        }
+        if (_damageCalculator == null)
+        {
+            _damageCalculator = new DamageCalculator();
         }
     }
 
@@ -87,6 +133,17 @@ public class AutoBattleFsm : MonoBehaviour
         _motor = motor;
         spawner = monsterSpawner;
         ResetState();
+    }
+
+    /// <summary>
+    /// 데미지 파이프라인(기획서 5장)을 명시 주입한다. 호출하지 않으면 <see cref="attackDamage"/> 고정값을 쓴다.
+    /// 크리티컬 난수를 결정적으로 만들려면 <paramref name="calculator"/> 에 페이크 판정기를 넣은
+    /// <see cref="DamageCalculator"/> 를 넘긴다.
+    /// </summary>
+    public void ConfigureCombat(StatContainer playerStats, DamageCalculator calculator)
+    {
+        _playerStats = playerStats;
+        _damageCalculator = calculator ?? new DamageCalculator();
     }
 
     /// <summary>전투 튜닝값을 한 번에 지정한다(선택).</summary>
@@ -210,7 +267,11 @@ public class AutoBattleFsm : MonoBehaviour
         if (_attackTimer <= 0f)
         {
             _attackTimer = attackInterval;
-            bool killed = _target.TakeDamage(attackDamage);
+
+            DamageResult hit = ComputeDamage();
+            MonsterDamaged?.Invoke(_target, hit);
+
+            bool killed = _target.TakeDamage(hit.Damage);
             if (killed)
             {
                 // TakeDamage 안에서 Died 가 발생해 스포너가 이미 반납했다.
@@ -218,6 +279,20 @@ public class AutoBattleFsm : MonoBehaviour
                 EnterLoot();
             }
         }
+    }
+
+    /// <summary>
+    /// 이번 타격의 데미지를 계산한다. 레이어드 스탯 + 데미지 공식(기획서 5.3)이 배선돼 있으면
+    /// 그것으로, 아니면 <see cref="attackDamage"/> 고정값으로.
+    /// </summary>
+    private DamageResult ComputeDamage()
+    {
+        if (_playerStats != null && _damageCalculator != null)
+        {
+            StatContainer targetStats = _target != null ? _target.Stats : null;
+            return _damageCalculator.Calculate(_playerStats, targetStats);
+        }
+        return new DamageResult(attackDamage, false, attackDamage);
     }
 
     private void EnterLoot()
