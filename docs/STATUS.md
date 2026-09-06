@@ -5,15 +5,22 @@
 
 ## 다음 할 일
 
-1단계(플레이어 컨트롤러 + 타일맵)를 슬라이스로 쪼갬. 위에서부터 하나씩:
+**1단계(플레이어 컨트롤러 + 타일맵) 완료.** 이제 2단계로 진행.
 
+2단계: 오프라인 방치 보상 (DESIGN.md 6장). 코드량 적고 독립적. 슬라이스 후보:
+- [ ] 2단계-1: OfflineRewardCalculator — 순수 계산 클래스(경과시간 → exp/gold),
+  최대 캡(8h), 시간 되돌리기 방어. EditMode 테스트로 검증(씬 불필요).
+- [ ] 2단계-2: 종료시각 저장/복원 (PlayerPrefs 또는 JSON), 재접속 시 계산 호출.
+- [ ] 2단계-3: 보상 팝업 UI + Login/Logout 토글 버튼(DESIGN 6.3), 플레이모드 스크린샷.
+
+그 다음: 3단계 자동전투 FSM → 4단계 스탯/데미지 파이프라인 (DESIGN.md 8장 순서)
+
+### 1단계 슬라이스 (전부 완료)
 - [x] 1단계-1: PlayerMovement 이동 API (좌우/점프/드롭다운) + PlayMode 테스트  → 커밋 05520f4
-- [x] 1단계-2: PlayerInputHandler (새 Input System → IPlayerMotor API 호출). InputSystem_Actions 의 Player 맵 Move/Jump 사용  → 커밋 9ae7298
-- [x] 1단계-3: 플레이 가능한 Game 씬 — 바닥 + 플레이어(스프라이트/Rigidbody2D/Collider/groundCheck) 배치, 플레이모드로 실행해 스크린샷 확인  → 커밋 52a1516
-- [x] 1단계-4: 레벨 레이아웃 — 바닥 + 원웨이 발판 A/B(PlatformEffector2D) + 일반 공중발판 1개. `[바닥]-[원웨이A]-[공중발판]-[원웨이B]-[바닥]` 구성  → 커밋 e89f2ab
-- [ ] 1단계-5: 카메라 추적(간단한 X축 제한 또는 Confiner)
-
-그 다음: 2단계 오프라인 방치 보상 → 3단계 자동전투 FSM → 4단계 스탯/데미지 파이프라인 (DESIGN.md 8장 순서)
+- [x] 1단계-2: PlayerInputHandler (새 Input System → IPlayerMotor API 호출)  → 커밋 9ae7298
+- [x] 1단계-3: 플레이 가능한 Game 씬 — 바닥 + 플레이어 배치  → 커밋 52a1516
+- [x] 1단계-4: 레벨 레이아웃 — 바닥 + 원웨이 발판 A/B + 일반 공중발판 1개  → 커밋 e89f2ab
+- [x] 1단계-5: 카메라 추적 — 플레이어 X 따라가되 스테이지 좌우 경계에서 X 제한  → 커밋 d71d86c
 
 ## 알려진 문제 / 막힌 것
 
@@ -25,6 +32,27 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #5
+- 한 일: 1단계-5 슬라이스 — 카메라 추적. `Assets/Scripts/Camera/CameraFollow.cs`
+  신규(Game asmdef). LateUpdate 에서 target.x 를 minX/maxX 로 Clamp → SmoothDamp(smoothTime
+  0.15) 로 수렴, Y 는 fixedY(0) 고정(스테이지 세로로 짧음, 기획서 3.4 "간단한 X축 제한").
+  Cinemachine 미사용. SetTarget/SetBounds public 메서드 노출(씬 로드 후 스포너용).
+  minX>maxX(스테이지가 화면보다 좁음) 이면 중앙 고정하도록 방어.
+  Game.unity Main Camera 에 부착: target=Player, X 제한 ±11.1
+  (바닥 폭 40 → x -20..20, ortho size 5, 16:9 반너비 ≈ 8.89 → 20-8.89 ≈ 11.1).
+- 확인한 것: PlayMode 테스트 `Assets/Tests/PlayMode/CameraFollowTests.cs` 6종 신규
+  (경계 안 추적 / 오른쪽·왼쪽 clamp / Y·Z 고정 / null target 무동작 / SetBounds 인자뒤집힘).
+  기존 8종 포함 PlayMode 14/14 통과. 콘솔 CS 에러 0.
+  스크린샷 2장 직접 확인(에디터 비포커스라 LateUpdate 를 리플렉션으로 직접 호출해 검증):
+  · `Assets/Screenshots/level_1-5_camera_center.png` — player.x=0 → cam.x=0, 플레이어가
+    화면 중앙, 3발판이 한 줄로, 지면이 하단을 채움.
+  · `Assets/Screenshots/level_1-5_camera_right_edge.png` — player.x=25 → cam.x=11.10 에서
+    멈춤. 오른쪽 끝에도 검은 여백 없이 지면이 화면 폭을 채움(경계 clamp 정상).
+  · 계산 로그: x=0→cam 0, x=25→cam 11.10, x=-25→cam -11.10, x=7→cam 7.
+- 커밋: d71d86c (CameraFollow + 테스트 + Game.unity), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 2단계-1 (OfflineRewardCalculator 순수 계산 클래스 + EditMode 테스트).
+
 
 <!-- 형식:
 ### YYYY-MM-DD 바퀴 #N
