@@ -41,6 +41,29 @@ public class MonsterSpawnerTests
         return spawner;
     }
 
+    /// <summary>스폰 지점(자식 Transform)을 붙인 스포너. 지점마다 슬롯 1개.</summary>
+    private MonsterSpawner NewSpawnerWithPoints(Vector2[] positions, float respawnDelay)
+    {
+        var go = new GameObject("Spawner");
+        _spawned.Add(go);
+        var spawner = go.AddComponent<MonsterSpawner>();
+        SetPrivate(spawner, "spawnOnStart", false);
+        SetPrivate(spawner, "prewarm", 0);
+
+        var points = new Transform[positions.Length];
+        for (int i = 0; i < positions.Length; i++)
+        {
+            var p = new GameObject("SpawnPoint" + i);
+            p.transform.SetParent(go.transform);
+            p.transform.position = positions[i];
+            points[i] = p.transform;
+        }
+        SetPrivate(spawner, "spawnPoints", points);
+        // Configure 가 슬롯을 다시 만들므로 spawnPoints 주입 뒤에 호출한다.
+        spawner.Configure(new MonsterData("slime", 20f, 3f, 1f, 10, 5), positions.Length, respawnDelay);
+        return spawner;
+    }
+
     [TearDown]
     public void TearDown()
     {
@@ -271,5 +294,96 @@ public class MonsterSpawnerTests
 
         far.TakeDamage(9999f);
         Assert.IsNull(s.GetNearestAliveMonster(Vector2.zero));
+    }
+
+    // ---------------- 스폰 지점별 슬롯 + 동일 위치 리스폰 (INBOX 2026-09-07 항목 2) ----------------
+
+    [Test]
+    public void 스폰_지점마다_몬스터가_한_마리씩_채워진다()
+    {
+        var points = new[] { new Vector2(-8f, -1.35f), new Vector2(-6f, 0.65f), new Vector2(6.5f, 2.3f) };
+        MonsterSpawner s = NewSpawnerWithPoints(points, respawnDelay: 5f);
+
+        s.FillToCapacity();
+
+        Assert.AreEqual(3, s.MaxAlive, "슬롯 수 = 스폰 지점 수");
+        Assert.AreEqual(3, s.AliveCount);
+        foreach (Vector2 p in points)
+        {
+            bool matched = false;
+            foreach (Monster m in s.AliveMonsters)
+            {
+                if (((Vector2)m.transform.position - p).sqrMagnitude < 0.001f) matched = true;
+            }
+            Assert.IsTrue(matched, $"{p} 지점에 몬스터가 없다");
+        }
+    }
+
+    [Test]
+    public void 몬스터가_죽으면_지연_후_같은_자리에서_리스폰된다()
+    {
+        var points = new[] { new Vector2(-8f, -1.35f), new Vector2(6.5f, 2.3f) };
+        MonsterSpawner s = NewSpawnerWithPoints(points, respawnDelay: 5f);
+        s.FillToCapacity();
+
+        Monster victim = s.AliveMonsters[0];
+        Vector3 deathPos = victim.transform.position;
+        victim.TakeDamage(9999f);
+
+        Assert.AreEqual(1, s.AliveCount);
+        Assert.AreEqual(1, s.PendingRespawnCount, "죽은 슬롯은 대기 상태여야 한다");
+
+        s.TickRespawn(3f);
+        Assert.AreEqual(1, s.AliveCount, "지연이 안 지났으면 리스폰 안 함");
+        Assert.AreEqual(1, s.PendingRespawnCount);
+
+        s.TickRespawn(2.5f); // 누적 5.5s > 5s
+        Assert.AreEqual(2, s.AliveCount);
+        Assert.AreEqual(0, s.PendingRespawnCount);
+
+        bool respawnedAtSamePos = false;
+        foreach (Monster m in s.AliveMonsters)
+        {
+            if ((m.transform.position - deathPos).sqrMagnitude < 0.001f) respawnedAtSamePos = true;
+        }
+        Assert.IsTrue(respawnedAtSamePos, "죽은 그 자리에서 다시 나와야 한다");
+        Assert.AreEqual(2, s.PoolSize, "풀 인스턴스를 재사용해야 한다");
+    }
+
+    [Test]
+    public void 리스폰_대기_중에는_그_지점을_다시_채우지_않는다()
+    {
+        var points = new[] { new Vector2(-8f, -1.35f), new Vector2(6.5f, 2.3f) };
+        MonsterSpawner s = NewSpawnerWithPoints(points, respawnDelay: 5f);
+        s.FillToCapacity();
+
+        s.AliveMonsters[0].TakeDamage(9999f);
+        Assert.AreEqual(1, s.AliveCount);
+
+        s.FillToCapacity();      // 대기 중 슬롯은 건너뛴다
+        Assert.AreEqual(1, s.AliveCount, "대기 중에는 중첩 스폰하지 않는다");
+        Assert.IsNull(s.SpawnOne(), "빈 슬롯이 대기 중이면 SpawnOne 도 null");
+    }
+
+    [Test]
+    public void 지점별_리스폰_타이머는_서로_독립적이다()
+    {
+        var points = new[] { new Vector2(-8f, 0f), new Vector2(0f, 0f), new Vector2(8f, 0f) };
+        MonsterSpawner s = NewSpawnerWithPoints(points, respawnDelay: 4f);
+        s.FillToCapacity();
+
+        s.AliveMonsters[0].TakeDamage(9999f);
+        s.TickRespawn(2f);                       // 첫 슬롯 대기 2s 경과
+        s.AliveMonsters[0].TakeDamage(9999f);    // 남은 것 중 하나 더 죽임(이제 대기 2개)
+        Assert.AreEqual(1, s.AliveCount);
+        Assert.AreEqual(2, s.PendingRespawnCount);
+
+        s.TickRespawn(2.5f); // 먼저 죽은 슬롯(누적 4.5s)만 부활, 나중 슬롯(2.5s)은 아직
+        Assert.AreEqual(2, s.AliveCount);
+        Assert.AreEqual(1, s.PendingRespawnCount);
+
+        s.TickRespawn(2f); // 나중 슬롯도 부활
+        Assert.AreEqual(3, s.AliveCount);
+        Assert.AreEqual(0, s.PendingRespawnCount);
     }
 }
