@@ -5,7 +5,8 @@
 
 ## 다음 할 일
 
-**MVP(1~4단계) 완료. INBOX(2026-09-07 05:26) 슬라이스 A·B 완료. 다음은 슬라이스 C(몬스터 체력바).**
+**MVP(1~4단계) 완료. INBOX(2026-09-07 05:26) 항목 1~5 전부 완료 (바퀴 #17~#19). 대기: 입력 없음.**
+바퀴 #19 에서 커밋 푸쉬 후 `loop/STOP` 생성. 새 지시는 INBOX 에 남길 것.
 
 ### INBOX 2026-09-07 05:26 — 슬라이스 분할 (한 바퀴에 하나씩)
 - [x] **A. 레벨 재설계 (INBOX 1 + 3)** — 전 플랫폼 원웨이 통일 + 점프 도달범위 기준 다층 배치 +
@@ -18,10 +19,12 @@
     maxAlive 8 / respawnDelay 5 / prewarm 8.
   · 플레이모드 검증: FSM 이 지면↔L1↔L2↔L3, 지면↔R1↔R2↔R3 를 점프/드롭다운으로 오르내리며
     처치(kills 14+), pool 8 고정, 죽은 슬롯이 5s 뒤 동일 좌표에서 부활. 스크린샷 확인.
-- [ ] **C. 몬스터 체력바 (INBOX 4)** — 현재 몬스터 HP 바 UI 가 **아예 없다**(코드베이스 확인).
-  지시는 "줄어드는 방향 수정"이지만 실제로는 신규 구현이 필요. 좌측 고정(pivot/anchor 0,0.5)
-  fill 방식으로 몬스터 위 월드 스페이스 바를 새로 만들 것. DamageTextSpawner 와 유사하게
-  FSM.MonsterDamaged / Monster 이벤트 구독.
+- [x] **C. 몬스터 체력바 (INBOX 4)** — 바퀴 #19 완료. 커밋 145d970(스크립트+테스트) / ea68795(씬 배선).
+  HP 바 UI 가 아예 없어 신규 구현. `MonsterHealthBar`(좌측 피벗 0,0.5 채움 막대 — 왼쪽 끝 고정,
+  scale.x 만 감소 → "왼쪽 고정, 오른쪽 깎임") + `MonsterHealthBarPool`(DamageTextPool 설계) +
+  `MonsterHealthBarSpawner`(AutoBattleFsm.MonsterDamaged 구독 → 맞은 몬스터에 바 부착, 매 프레임
+  추적·체력비율 갱신, 사망/반납 시 풀로). Player 에 배선. PlayMode 14종. 스크린샷 직접 확인.
+- [x] **D. 마무리 (INBOX 5)** — 남은 미처리 없음 확인 → 커밋 푸쉬 후 `loop/STOP` 생성. 바퀴 #19.
 
 ### DESIGN 9장 완료 기준 체크리스트
 - [x] 플레이어가 좌우 이동, 점프, 원웨이 플랫폼 드롭다운을 모두 수행 (1단계)
@@ -173,10 +176,54 @@
   항상 최근접이 됨. 순회 자체는 정상.
 - 바퀴 #18 관찰: 스크린샷 촬영 시 MCP ScreenshotUtility 에서 "PlayerLoop ... recursively" Error
   1건이 뜬다(플레이모드 중 촬영). 게임 코드와 무관(com.coplaydev.unity-mcp 내부).
+- 바퀴 #19 설계 선택: 체력바는 몬스터가 **처음 맞은 순간** 붙는다(스폰 즉시 X). DamageTextSpawner
+  와 같은 이벤트 소스(FSM.MonsterDamaged)를 쓰기 때문 — 방치형에서 전투 중인 대상만 바가 보이는
+  건 자연스럽다. 스폰 즉시 표시가 필요하면 MonsterSpawner 에 스폰 이벤트를 추가해야 함(MVP 밖).
 
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #19
+- 한 일: INBOX(05:26) 슬라이스 C — 몬스터 체력바(항목 4). 코드베이스에 HP 바 UI 가 아예 없어
+  신규 구현. 신규 3파일 + PlayMode 테스트 1파일.
+  · `MonsterHealthBar`(MonoBehaviour) — 월드 스페이스 스프라이트 2장(배경 + 채움)으로 그린다
+    (별도 Canvas 불필요). 채움 막대는 **좌측 피벗(0, 0.5) 스프라이트**를 쓰고 왼쪽 끝을 배경
+    왼쪽 끝(-barWidth/2)에 고정한 채 `localScale.x = barWidth × 비율` 로만 조정 → 체력이 깎이면
+    항상 "왼쪽 고정, 오른쪽이 줄어드는" 방향. (INBOX 4 — 중앙 피벗이면 양쪽에서 줄어 보이는 문제)
+    `Bind(monster)` 로 가득 찬 채 시작, `Tick()` 이 `CurrentHp/MaxHp` 로 갱신 + 몬스터를 따라
+    이동, 대상이 죽거나 비활성이면 false 반환. 스스로 Destroy 안 함(`Hide()` 로 비활성).
+    sortingOrder 40/41 (몬스터 5 보다 앞, 데미지 숫자 50 보다 뒤). barHeight 0.22 / verticalOffset 1.05.
+    테스트 확인용 `Fraction` / `FillLocalScaleX` / `FillLocalPositionX` 노출.
+  · `MonsterHealthBarPool` — `DamageTextPool` 과 동일 설계. `Func<MonsterHealthBar>` 주입 순수
+    클래스, prewarm/Rent/Return, 중복 반납 무시, `TotalCreated`/`IdleCount`. (기획서 4.4)
+  · `MonsterHealthBarSpawner`(MonoBehaviour) — `AutoBattleFsm.MonsterDamaged` 구독(DamageTextSpawner
+    와 동일한 OnEnable/OnDisable/_subscribed/Configure 패턴). 처음 맞은 몬스터에 풀에서 바를 꺼내
+    `Bind`(이미 바가 붙은 몬스터는 스킵), `Update`/`Tick()` 이 활성 바를 진행하고 대상이 사라진
+    바를 풀로 반납. 부모 없이 생성(Player 비균일 스케일 1.6y 로 늘어나는 것 방지). FSM 은 체력바를
+    모른다(의존성 분리). prewarm 8.
+  · Game.unity: Player 에 `MonsterHealthBarSpawner` 부착 + `fsm` = Player 의 AutoBattleFsm 주입
+    (manage_components add + execute_code SerializedObject + SaveScene).
+- 확인한 것: EditMode 65/65(무변화), PlayMode 83/83(기존 69 + MonsterHealthBarTests 14).
+  콘솔: NoSubscription(Unity AI) + TestResults 저장 로그 + TestFramework 내부 NRE + ScreenshotUtility
+  PlayerLoop 재귀 — 전부 게임 코드 무관. 게임플레이/CS 에러 0.
+  신규 14종: Bar 6(Bind 시 가득·몬스터 위 / SetFraction 왼쪽끝 고정·scale.x 만 감소 / 0~1 클램프 /
+  Tick 이 체력비율 갱신·추적 / 죽으면 Tick false / Hide 비활성·대상 비움), Pool 3(반납 재사용 /
+  중복반납 무시 / null 팩토리 거부), Spawner 5(MonsterDamaged → 바 부착 / 같은 몬스터 여러 번
+  때려도 바 1개 / 사망 시 반납·인스턴스 재사용 / 비활성 스포너 무동작 / 실제 FSM 타격이 바로
+  이어지고 왼쪽 고정으로 줄어듦).
+  플레이모드(에디터 포커스, frame ~700+): spawnOnStart 8슬롯, FSM 이 몬스터 처치, 타격 시 바가
+  붙어 몬스터를 따라다니며 줄어드는 것 확인. QA 구도로 좌측 타워 몬스터들을 각각 다른 체력
+  비율(0.2~0.9)로 만들고 데미지 숫자 스포너는 잠시 끈 뒤 스크린샷 직접 확인:
+  · `Assets/Screenshots/healthbar_inbox4.png` — 좌측 3단 계단 + 지면의 빨간 몬스터 4마리, 각
+    머리 위에 체력바(왼쪽 초록 채움 + 오른쪽 어두운 배경). 비율 제각각.
+  · `Assets/Screenshots/healthbar_inbox4_zoom.png` — 확대. 20% 몬스터의 바가 왼쪽에 얇은 초록,
+    오른쪽 대부분이 어두운 배경 — 왼쪽 고정, 오른쪽으로 깎이는 방향 확인.
+- 커밋: 145d970 (MonsterHealthBar 3파일 + PlayMode 테스트), ea68795 (Game.unity 배선 + 게이지
+  높이/오프셋 튜닝). STATUS/INBOX 갱신은 별도 커밋.
+  ProjectSettings/*.asset 재직렬화·research-logs/loop.csv 는 이번 작업 무관이라 제외.
+  Assets/Screenshots/ 는 .gitignore 대상(로컬 QA 산출물).
+- 다음 할 일: INBOX 항목 1~5 전부 완료. `loop/STOP` 생성 후 루프 종료. 새 지시는 INBOX 에.
 
 ### 2026-09-07 바퀴 #18
 - 한 일: INBOX(05:26) 슬라이스 B — 플랫폼별 몬스터 스폰 + 동일 위치 리스폰(INBOX 항목 2).
