@@ -80,7 +80,7 @@ function Cmd-Stop {
             Stop-ScheduledTask -TaskName $LOOP_TASK_NAME
         }
         Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
-            Where-Object { $_.CommandLine -like "*loop.ps1*" } |
+            Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match '-File' -and $_.CommandLine -match 'loop[\\/]loop\.ps1' } |
             ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
         Write-Host "실행 중이던 loop.ps1 프로세스 강제 종료."
     }
@@ -101,7 +101,7 @@ function Cmd-Status {
     Write-Host "STOP 파일     : $(if (Test-Path $LOOP_STOP) { '있음 (멈추는 중/멈춤)' } else { '없음' })"
 
     $running = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -like "*loop.ps1*" }
+        Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match '-File' -and $_.CommandLine -match 'loop[\\/]loop\.ps1' }
     Write-Host "loop.ps1 PID  : $(if ($running) { ($running.ProcessId -join ', ') } else { '없음' })"
 
     $latest = Get-ChildItem $LOOP_LOGDIR -Filter "loop_*.log" -ErrorAction SilentlyContinue |
