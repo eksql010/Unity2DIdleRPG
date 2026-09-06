@@ -5,18 +5,31 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계 전부 완료. 3단계 전부 완료. 4단계-1 완료. 4단계-2 완료.**
-다음은 **4단계-3**: `AutoBattleFsm.attackDamage`(고정값) 와 `Monster.TakeDamage` 앞단을
-`DamageCalculator` 로 교체 + 플레이어/몬스터에 `StatContainer` 부착 + 데미지 텍스트(플레이모드 스크린샷).
-· FSM 에 `DamageCalculator`(런타임은 `new DamageCalculator()` = 난수 판정기) + 플레이어 `StatContainer`
-  주입. Attack 상태에서 `calc.Calculate(playerStats, target.Stats)` → `target.TakeDamage(result.Damage)`.
-· `Monster` 에 `StatContainer`(스폰 시 `StatContainer.ForMonster(Data)`) 노출 — 현재 `Monster` 는 HP만
-  들고 있으므로 방어력을 계산에 넣으려면 스탯 컨테이너를 붙여야 한다.
-· 데미지 텍스트: 크리티컬 여부(`DamageResult.IsCrit`)에 따라 색/크기 구분, Object Pooling(DESIGN 4.4).
-  플레이모드 스크린샷으로 몬스터 위에 데미지 숫자가 뜨는지 직접 확인.
-· 4단계 완료 시 DESIGN 9장 체크리스트 3번("처치 시 스탯 파이프라인 기반 데미지 계산") 충족.
+**1단계 완료. 2단계 전부 완료. 3단계 전부 완료. 4단계-1 완료. 4단계-2 완료. 4단계-3a 완료.**
+다음은 **4단계-3b**: 데미지 텍스트(플로팅 데미지 숫자) + Game.unity 배선 + 플레이모드 스크린샷.
+· FSM `MonsterDamaged(Monster, DamageResult)` 이벤트를 구독하는 `DamageTextSpawner`(MonoBehaviour) 신설.
+  맞은 몬스터 위치 위에 숫자 텍스트를 띄우고 위로 떠오르며 페이드아웃 후 반납. Object Pooling(DESIGN 4.4)
+  — `Instantiate/Destroy` 반복 금지. 크리티컬(`DamageResult.IsCrit`)이면 색/크기 구분.
+· Game.unity 배선: Player 의 `AutoBattleFsm` 은 이미 씬에 있고 `playerMovement` 가 주입돼 있어
+  Awake 에서 데미지 파이프라인이 자동 구성됨(4단계-3a). `DamageTextSpawner` 를 Player(또는 별도
+  GameObject)에 부착하고 FSM 참조 주입. 폰트는 LegacyRuntime.ttf.
+· 플레이모드 스크린샷으로 몬스터 위에 데미지 숫자(+크리티컬 강조)가 뜨는지 직접 확인.
+· 4단계-3b 완료 시 4단계 종료 → DESIGN 9장 체크리스트 3번("처치 시 스탯 파이프라인 기반 데미지 계산") 충족.
 
 ### 4단계 슬라이스
+- [x] 4단계-3a: `Monster.Stats`(StatContainer) + `AutoBattleFsm` 데미지 파이프라인 배선.
+  · `Monster.Stats` — 스폰 시 `StatContainer.ForMonster(Data)`. 데미지 공식이 방어력을 여기서 읽는다.
+  · `AutoBattleFsm.ConfigureCombat(StatContainer playerStats, DamageCalculator)` 명시 주입.
+    `Awake` 는 `playerMovement` 가 인스펙터 주입된 실제 씬일 때만 인스펙터 값
+    (`basePlayerAttackPower` 12 / `basePlayerCritRate` 0.2 / `basePlayerDefense` 3)으로
+    `StatContainer` + `new DamageCalculator()`(난수 판정기)를 자동 구성. 테스트는 Configure 로 주입하고
+    `playerMovement` 가 null 이라 자동 구성 안 됨 → 기존 10종 무수정 통과.
+  · `TickAttack` 이 `ComputeDamage()` → 파이프라인 배선 시 `calc.Calculate(_playerStats, _target.Stats)`,
+    미배선 시 `new DamageResult(attackDamage, false, attackDamage)` 폴백. 계산 후
+    `MonsterDamaged?.Invoke(target, result)` → `target.TakeDamage(result.Damage)`.
+  · `MonsterDamaged(Monster, DamageResult)` 이벤트 신설 — 4단계-3b 데미지 텍스트가 소비.
+  · PlayMode `Assets/Tests/PlayMode/AutoBattleDamageTests.cs` 6종.
+  → 커밋 b7be942 (STATUS 갱신은 별도 커밋)
 - [x] 4단계-2: `Assets/Scripts/Combat/DamageCalculator.cs` 신규 1파일 — 데미지 공식(DESIGN 5.3).
   · `ICritChanceRoller.Roll(prob)` — 크리티컬 판정 추상화. `UnityCritChanceRoller`(런타임, `Random.value`,
     prob≤0 항상 false / prob≥1 항상 true). 테스트는 `FixedRoller` 페이크 주입 → 결정적.
@@ -118,6 +131,27 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #15
+- 한 일: 4단계-3a 슬라이스 — 자동전투 FSM 의 Attack 을 데미지 파이프라인(DESIGN 5.3)에 연결.
+  · `Monster.Stats`(StatContainer) 추가 — `Spawn` 에서 `StatContainer.ForMonster(Data)` 로 구성.
+    이제 몬스터가 방어력을 스탯 컨테이너로 들고 있어 데미지 공식이 이를 읽는다(DESIGN 5.4).
+  · `AutoBattleFsm.ConfigureCombat(StatContainer, DamageCalculator)` 명시 주입 + `Awake` 자동 구성
+    (인스펙터에 `playerMovement` 가 주입된 실제 씬 배선일 때만 — 테스트는 `Configure` 로 주입하고
+    `playerMovement` 가 null 이므로 자동 구성이 안 걸려 기존 FSM 테스트 10종이 무수정 통과).
+  · `TickAttack` → `ComputeDamage()`: 파이프라인 배선 시 `calc.Calculate(playerStats, target.Stats)`
+    ((공격력−방어력)×크리티컬 1.5배), 미배선 시 `attackDamage` 고정값 폴백.
+  · `MonsterDamaged(Monster, DamageResult)` 이벤트 신설 — 4단계-3b 데미지 텍스트가 구독할 자리.
+  화면 없는 로직 배선이라 스크린샷은 4단계-3b(데미지 텍스트 + Game.unity)로 분리
+  (4단계-1/2, 3단계-1/2a 가 스크린샷을 배선 슬라이스로 미룬 것과 동일).
+- 확인한 것: EditMode 65/65(무변화), PlayMode 53/53(기존 47 + AutoBattleDamageTests 6종).
+  콘솔 CS/게임플레이 에러 0 (TestResults.xml 저장 로그 / connection.state_change 는 무관).
+  신규 6종: 스폰 시 Data 기반 StatContainer 보유 / 파이프라인 주입 시 (공격력−방어력) 데미지 /
+  크리티컬 1.5배 / MonsterDamaged 이벤트가 결과와 함께 발생 / 미배선 시 고정 attackDamage 폴백 /
+  파이프라인 데미지로 처치해도 KillCount·MonsterKilled 정상. 크리티컬 난수는 FixedRoller 페이크로 고정.
+- 커밋: b7be942 (Monster.Stats + FSM 배선 + PlayMode 테스트), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 4단계-3b (데미지 텍스트 플로팅 숫자 + Object Pooling + Game.unity 배선, 플레이모드
+  스크린샷). 완료 시 4단계 종료 → DESIGN 9장 체크리스트 3번 충족.
 
 ### 2026-09-07 바퀴 #14
 - 한 일: 4단계-2 슬라이스 — 데미지 계산 파이프라인(DESIGN 5.3). `Assets/Scripts/Combat/DamageCalculator.cs`
