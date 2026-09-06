@@ -5,8 +5,8 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계 전부 완료. 3단계-1 완료. 3단계-2a 완료(FSM 로직 + 테스트).**
-다음은 3단계-2b: Game.unity 에 스포너 배치 + 플레이모드 스크린샷.
+**1단계 완료. 2단계 전부 완료. 3단계-1 완료. 3단계-2a 완료. 3단계-2b 완료(씬 배선 + 플레이모드 확인).**
+다음은 3단계-3: Loot 에서 골드/exp 실제 지급 + 플레이모드에서 순환 도는지 스크린샷.
 
 3단계: 자동전투 상태머신 (DESIGN.md 4장). Idle→Move→Attack→Loot→Idle 순환.
 2.4 의 IPlayerMotor(MoveHorizontal/Jump/DropDown)를 그대로 호출. 슬라이스:
@@ -14,10 +14,10 @@
 - [x] 3단계-2a: AutoBattleFsm — Idle(GetNearestAliveMonster 로 타겟)→Move(IPlayerMotor 로 접근,
   위=Jump/아래=DropDown 휴리스틱 DESIGN 4.3)→Attack(사거리 진입 시 attackInterval 주기 TakeDamage)
   →Loot(통과 상태, 처치 수만 집계)→Idle. Tick(dt) 주입식, PlayMode 10종.  → 커밋 30f22a5
-- [ ] 3단계-2b: Game.unity 의 Player 에 AutoBattleFsm 부착 + MonsterSpawner GameObject + 스폰 지점
-  배치. PlayerInputHandler 와 AutoBattleFsm 이 같은 PlayerMovement(IPlayerMotor)를 공유하는지 확인.
-  플레이모드 스크린샷으로 몬스터 렌더 + 플레이어가 몬스터로 이동/공격하는지 눈으로 확인.
-  (3단계-1/-2a 는 화면 배선 없이 로직만 만들었으므로 여기서 처음 눈으로 봄.)
+- [x] 3단계-2b: Game.unity 의 Player 에 AutoBattleFsm 부착 + MonsterSpawner GameObject + 스폰 지점
+  4개(x -9/-5/5/9, y -2.85) 배치. AutoBattleFsm 실행순서 100(PlayerInputHandler 뒤) — 자동전투가
+  기본 조작이므로 AI 가 매 프레임 마지막에 이동을 덮어씀. 둘 다 같은 PlayerMovement 공유 확인
+  (GetComponent<IPlayerMotor>() == Player 의 PlayerMovement, sharedMotor=True).  → 커밋 8aa556b
 - [ ] 3단계-3: Loot 에서 골드/exp 실제 지급 + 플레이모드에서 순환 도는지 스크린샷.
 그 다음: 4단계 스탯/데미지 파이프라인 (5장) — 3단계 Attack 에서 사용.
 
@@ -63,10 +63,11 @@
 
 ## 알려진 문제 / 막힌 것
 
-- 3단계-1/-2a 는 화면 배선이 없다(스포너·FSM 이 어느 씬에도 안 붙음). 3단계-2b 에서 Game.unity 에
-  MonsterSpawner + 스폰 지점 + Player 에 AutoBattleFsm 을 놓고 플레이모드 스크린샷으로 확인할 것.
-- AutoBattleFsm 은 Jump()/DropDown() 을 조건 없이 호출한다(성립 여부는 PlayerMovement 가 판단).
-  2b 에서 실제 다층 이동이 필요하면 레벨에 상단 발판 추가 문제(아래 항목)와 함께 볼 것.
+- (해결) 3단계-2b 에서 Game.unity 에 MonsterSpawner + 스폰 지점 + Player 에 AutoBattleFsm 배선 완료.
+- 3단계-2b 스폰 지점은 전부 지면 높이(y -2.85)라 FSM 이 Jump()/DropDown() 을 호출하지 않는다
+  (dy ≈ -0.5 < verticalThreshold 0.75). 다층 이동 검증은 상단 발판 추가(아래 항목) 후 별도 슬라이스로.
+- 3단계-2b 관찰: FSM 이 좌측 클러스터(x -9/-5)에 오래 머문다 — 리스폰이 그쪽에서 먼저 차서
+  항상 최근접이 됨. 순회 자체는 정상(플레이어 X 가 -8~8 전 구간 왕복하는 것 확인).
 - 레벨은 지면↔발판 1층 구조뿐(상/하 이동은 점프 1회 + 드롭다운 1회로 커버). 3단계
   자동전투 FSM 에서 다층 경로가 필요해지면 상단 발판을 추가할 것. (이번 바퀴에 상단
   발판을 시도했으나, 캐릭터 높이 1.6 + 발판 간격 ~2u 라 아래 발판이 위 발판으로의
@@ -75,6 +76,30 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #11
+- 한 일: 3단계-2b 슬라이스 — 로직만 있던 스포너/FSM 을 Game.unity 에 처음 배선.
+  · `MonsterSpawner` GameObject 를 (0,-2.85) 에 생성, 자식 스폰 지점 4개(x -9/-5/5/9, y -2.85).
+    SerializedObject 로 spawnPoints 배열 주입. monsterData 는 필드 기본값(hp 30) 그대로,
+    maxAlive 4 / respawnDelay 3 / prewarm 4 / spawnOnStart true.
+  · Player 에 `AutoBattleFsm` 부착, playerMovement=Player 의 PlayerMovement, spawner=위 스포너 주입.
+  · `MonoImporter.SetExecutionOrder(AutoBattleFsm, 100)` — PlayerInputHandler(0) 보다 뒤에 돌게 해서
+    자동전투가 매 프레임 마지막에 MoveHorizontal 을 덮어쓰도록(기획서 1: "이번 범위에서는 자동전투가
+    기본"). 실행순서는 AutoBattleFsm.cs.meta 에 저장됨. 둘 다 같은 IPlayerMotor(PlayerMovement)
+    공유 확인(sharedMotor=True).
+  execute_code(codedom) 로 결정적 배선 후 씬 저장.
+- 확인한 것: EditMode 25/25, PlayMode 39/39 통과. 콘솔 CS/게임플레이 에러 0
+  (RelayService TaskCanceled 경고·connection.state_change 는 무관).
+  플레이모드(에디터 포커스 상태라 프레임 진행됨, frameCount ~1만):
+  · FSM 이 Idle→Move→Attack→Loot→Idle 순환하며 몬스터를 처치. KillCount 가 10→16→21 로 계속 증가,
+    PoolSize 는 4 고정(Instantiate/Destroy 반복 없음 — 기획서 4.4 풀링 확인).
+  · 스폰 지점 4곳에 몬스터 스폰, 사망 후 respawnDelay 지나 풀에서 재사용 리스폰.
+  · 플레이어 X 가 -8~8 전 구간 왕복(카메라도 따라 이동), 몬스터 사거리 진입 시 정지 후 공격.
+  · 스크린샷 `Assets/Screenshots/combat_3-2b_a.png` / `combat_3-2b_b.png` 직접 확인 —
+    노란 플레이어가 빨간 몬스터에 붙어 공격, 시안 원웨이/회색 공중발판/녹색 지면/하단 Login·Logout
+    UI 정상 렌더. 카메라가 플레이어를 따라 좌측으로 이동한 것도 두 장 비교로 확인.
+- 커밋: 8aa556b (Game.unity + AutoBattleFsm.cs.meta 실행순서), STATUS 갱신은 별도 커밋.
+- 다음 할 일: 3단계-3 (Loot 에서 골드/exp 실제 지급 + 플레이모드 순환 스크린샷).
 
 ### 2026-09-07 바퀴 #10
 - 한 일: 3단계-2a 슬라이스 — `Assets/Scripts/Combat/AutoBattleFsm.cs` 신규(MonoBehaviour).
