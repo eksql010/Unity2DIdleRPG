@@ -5,8 +5,12 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계 전부 완료. 3단계-1 완료. 3단계-2a 완료. 3단계-2b 완료(씬 배선 + 플레이모드 확인).**
-다음은 3단계-3: Loot 에서 골드/exp 실제 지급 + 플레이모드에서 순환 도는지 스크린샷.
+**1단계 완료. 2단계 전부 완료. 3단계 전부 완료(3단계-1/2a/2b/3).**
+다음은 **4단계: 스탯/데미지 파이프라인 (DESIGN.md 5장)** — 레이어드 스탯(Flat/PercentAdd/
+PercentMultiply) + Dirty Flag + 데미지 공식((공격력-방어력)×크리티컬×기타%). 3단계 Attack 의
+고정 데미지(AutoBattleFsm.attackDamage) 와 Monster.TakeDamage 앞단을 이 파이프라인으로 교체.
+슬라이스 후보: 4단계-1 StatContainer/Modifier(순수, EditMode) → 4단계-2 DamageCalculator
+(크리티컬 판정 주입식, EditMode) → 4단계-3 FSM/Monster 배선 + 데미지 텍스트(플레이모드 스크린샷).
 
 3단계: 자동전투 상태머신 (DESIGN.md 4장). Idle→Move→Attack→Loot→Idle 순환.
 2.4 의 IPlayerMotor(MoveHorizontal/Jump/DropDown)를 그대로 호출. 슬라이스:
@@ -18,7 +22,11 @@
   4개(x -9/-5/5/9, y -2.85) 배치. AutoBattleFsm 실행순서 100(PlayerInputHandler 뒤) — 자동전투가
   기본 조작이므로 AI 가 매 프레임 마지막에 이동을 덮어씀. 둘 다 같은 PlayerMovement 공유 확인
   (GetComponent<IPlayerMotor>() == Player 의 PlayerMovement, sharedMotor=True).  → 커밋 8aa556b
-- [ ] 3단계-3: Loot 에서 골드/exp 실제 지급 + 플레이모드에서 순환 도는지 스크린샷.
+- [x] 3단계-3: Loot 에서 골드/exp 실제 지급. `PlayerWallet`(골드/경험치 누적 + Changed 이벤트),
+  `LootCollector`(AutoBattleFsm.MonsterKilled 구독 → 죽은 몬스터의 goldReward/expReward 를 지갑에),
+  `WalletHud`(지갑 Changed → 화면 우상단 Text 갱신). FSM 은 지갑을 모르게 두어 3단계-2 테스트
+  그대로 통과. PlayMode 8종 신설. 플레이모드에서 HUD 가 골드+5/경험치+10 씩 실시간 누적 확인.
+  → 커밋 2eab21a(스크립트+테스트) / 65237ad(Game.unity 배선)
 그 다음: 4단계 스탯/데미지 파이프라인 (5장) — 3단계 Attack 에서 사용.
 
 ### 3단계 슬라이스
@@ -63,6 +71,11 @@
 
 ## 알려진 문제 / 막힌 것
 
+- 3단계-3 관찰: OfflineRewardController.Start 가 저장된 마지막 접속 시각 기준으로 보상 팝업을
+  자동으로 띄워, 플레이모드 진입 직후 스크린샷이 팝업에 가려진다. 전투 화면을 보려면 팝업을
+  닫아야 한다(RewardPopup.SetActive(false)). 지갑 HUD 는 팝업과 무관하게 우상단에 항상 보임.
+- 3단계-3: 지갑은 세션 내 누적만 한다(저장/복원 없음). 오프라인 보상(6장)의 exp/gold 는 여전히
+  팝업 표시만 하고 PlayerWallet 에 반영되지 않는다 — 둘을 잇는 것은 MVP 범위 밖(필요 시 별도 슬라이스).
 - (해결) 3단계-2b 에서 Game.unity 에 MonsterSpawner + 스폰 지점 + Player 에 AutoBattleFsm 배선 완료.
 - 3단계-2b 스폰 지점은 전부 지면 높이(y -2.85)라 FSM 이 Jump()/DropDown() 을 호출하지 않는다
   (dy ≈ -0.5 < verticalThreshold 0.75). 다층 이동 검증은 상단 발판 추가(아래 항목) 후 별도 슬라이스로.
@@ -76,6 +89,35 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #12
+- 한 일: 3단계-3 슬라이스 — Loot 단계 보상 지급. 신규 3파일.
+  · `Assets/Scripts/Combat/PlayerWallet.cs` (MonoBehaviour) — long Gold/Exp 누적,
+    AddGold/AddExp(0 이하 무시), ResetWallet, Changed 이벤트. 저장/복원 없음(세션 내 누적만).
+  · `Assets/Scripts/Combat/LootCollector.cs` (MonoBehaviour) — OnEnable/OnDisable 에서
+    `AutoBattleFsm.MonsterKilled` 구독/해제. 처치 시 죽은 몬스터의 Data.goldReward/expReward 를
+    지갑에 넣고 LootedCount++. `Configure(fsm, wallet)` 주입식. FSM 은 지갑을 모른다(의존성 분리)
+    → AutoBattleFsm/3단계-2 테스트 무수정 통과.
+  · `Assets/Scripts/UI/WalletHud.cs` (MonoBehaviour) — 지갑 Changed 구독, "골드 N    경험치 N"
+    포맷으로 Text 갱신(매 프레임 폴링 안 함). `Configure(wallet, label)` 주입식.
+  Game.unity 배선: Player 에 위 3컴포넌트 부착 + 상호 참조 주입, UI Canvas 상단 우측에
+  WalletText(LegacyRuntime.ttf, 노란색, UpperRight) 추가. execute_code(codedom) + SerializedObject.
+- 확인한 것: EditMode 25/25, PlayMode 47/47(기존 39 + LootRewardTests 8종). 콘솔 CS/게임플레이
+  에러 0 (RelayService/connection.state_change 는 무관).
+  신규 테스트: Wallet 3(누적+Changed / 0이하 무시 / ResetWallet), LootCollector 4(처치→보상 지급 /
+  다마리 누적 / 비활성화 시 미수령 / 지갑 null 이어도 크래시 없이 LootedCount), WalletHud 1(변경 시
+  라벨 텍스트 갱신). 실제 MonsterSpawner+Monster+FakeMotor 로 FSM 을 돌려 통합 검증.
+  플레이모드(에디터 포커스, frame ~8천): FSM 이 Idle→Move→Attack→Loot 순환하며 처치, KillCount 와
+  LootedCount 가 동일하게 증가(9→15→16), wallet gold/exp = kills×(5/10) 정확히 일치,
+  HUD 우상단이 "골드 80    경험치 160" 으로 실시간 갱신됨. PoolSize 는 3단계-2b 확인대로 고정.
+  스크린샷 2장 직접 확인:
+  · `Assets/Screenshots/loot_3-3.png` — 진입 직후(오프라인 보상 팝업 떠 있음), 우상단 HUD "골드 50 경험치 100".
+  · `Assets/Screenshots/loot_3-3_combat.png` — 팝업 닫은 전투 화면. 노란 플레이어가 빨간 몬스터
+    2마리 사이, 시안 원웨이/회색 공중발판/녹색 지면/하단 Login·Logout, 우상단 HUD "골드 80 경험치 160".
+- 커밋: 2eab21a (PlayerWallet+LootCollector+WalletHud + LootRewardTests),
+  65237ad (Game.unity 배선 — 커밋 메시지에 "3단계-2b" 로 오기했으나 실제로는 3단계-3).
+  STATUS 갱신은 별도 커밋. EditorSettings.asset 의 EnterPlayModeOptions 변화는 플레이모드 부수효과라 제외.
+- 다음 할 일: 4단계-1 (StatContainer + Modifier 순수 클래스 + Dirty Flag, EditMode 테스트).
 
 ### 2026-09-07 바퀴 #11
 - 한 일: 3단계-2b 슬라이스 — 로직만 있던 스포너/FSM 을 Game.unity 에 처음 배선.
