@@ -5,20 +5,28 @@
 
 ## 다음 할 일
 
-**1단계 완료. 2단계-1·2단계-2 완료.** 이제 2단계-3(보상 팝업 UI)으로 진행.
+**1단계 완료. 2단계 전부 완료(2-1·2-2·2-3).** 이제 3단계 자동전투 FSM 으로 진행.
 
-2단계: 오프라인 방치 보상 (DESIGN.md 6장). 코드량 적고 독립적. 슬라이스:
+3단계: 자동전투 상태머신 (DESIGN.md 4장). Idle→Move→Attack→Loot→Idle 순환.
+2.4 의 IPlayerMotor(MoveHorizontal/Jump/DropDown)를 그대로 호출. 슬라이스 제안:
+- [ ] 3단계-1: 몬스터 스포너 + MonsterData/몬스터 오브젝트(HP만) + Object Pool.
+  스포너가 살아있는 몬스터 리스트를 관리(FindObjectsOfType 매프레임 금지, DESIGN 4.2/4.4).
+- [ ] 3단계-2: AutoBattleFsm — Idle(가장 가까운 살아있는 몬스터 탐색)→Move(IPlayerMotor
+  로 접근, 위=점프/아래 원웨이=드롭다운 휴리스틱, DESIGN 4.3)→Attack(사거리 진입 시).
+- [ ] 3단계-3: Loot(처치 후 골드/exp 획득) + 플레이모드에서 실제로 순환 도는지 스크린샷.
+그 다음: 4단계 스탯/데미지 파이프라인 (5장) — 3단계 Attack 에서 사용.
+
+### 2단계 슬라이스 (전부 완료)
 - [x] 2단계-1: OfflineRewardCalculator — 순수 계산 클래스(경과시간 → exp/gold),
   최대 캡(8h), 시간 되돌리기 방어. EditMode 테스트로 검증.  → 커밋 eb7f4f4
 - [x] 2단계-2: 종료시각 저장/복원 + 재접속 시 계산 호출. OfflineRewardService
   (계산기 + IOfflineTimeStore + IOfflineClock 조합), PlayerPrefsOfflineTimeStore
   (ISO8601 "o" 문자열, UTC 왕복). EditMode 테스트로 검증.  → 커밋 45ab163
-- [ ] 2단계-3: 보상 팝업 UI + Login/Logout 토글 버튼(DESIGN 6.3), 플레이모드 스크린샷.
-  Game 씬에 MonoBehaviour(예: OfflineRewardController) 를 두고 OfflineRewardService 를
-  구성 — Awake/Start 에서 ClaimOnReconnect, Logout 버튼→MarkSeen, Login 버튼→ClaimOnReconnect
-  후 결과를 팝업 텍스트로 표시. killsPerMinute/expPerKill/goldPerKill 는 인스펙터 필드로.
-
-그 다음: 3단계 자동전투 FSM → 4단계 스탯/데미지 파이프라인 (DESIGN.md 8장 순서)
+- [x] 2단계-3: OfflineRewardController(MonoBehaviour) + Game 씬 Overlay Canvas UI
+  (상태 텍스트 + Login/Logout 버튼 + 보상 팝업). Start=재접속 보상 계산·표시,
+  Logout=MarkSeen, Login=ClaimOnReconnect, OnApplicationPause/Quit 도 저장.
+  FormatRewardMessage/HasReward 는 순수 static → EditMode 검증. 플레이모드 스크린샷 확인.
+  → 커밋 345deba
 
 ### 1단계 슬라이스 (전부 완료)
 - [x] 1단계-1: PlayerMovement 이동 API (좌우/점프/드롭다운) + PlayMode 테스트  → 커밋 05520f4
@@ -37,6 +45,34 @@
 ---
 
 ## 기록 (최신이 위)
+
+### 2026-09-07 바퀴 #8
+- 한 일: 2단계-3 슬라이스 — `Assets/Scripts/Offline/OfflineRewardController.cs` 신규(MonoBehaviour).
+  Awake 에서 OfflineRewardCalculator(인스펙터 튜닝값 killsPerMinute/expPerKill/goldPerKill/
+  maxRewardHours) + PlayerPrefsOfflineTimeStore 로 OfflineRewardService 구성.
+  Start = 재접속: ClaimOnReconnect → 지급할 보상이 있으면 팝업 표시. Logout 버튼 = MarkSeen +
+  팝업 숨김, Login 버튼 = ClaimOnReconnect + 팝업 표시. OnApplicationPause(true)/OnApplicationQuit
+  에서도 MarkSeen. `HasReward`(null/rejected/획득 0 → false) 와 `FormatRewardMessage`(경과 시간 +
+  획득 경험치/골드, 캡 도달 시 안내 덧붙임) 를 public static 순수 함수로 분리.
+  `Game.unity` 에 execute_code(codedom, C# 6 — 루트에서 `using` 불가, System.Func 람다로 헬퍼
+  구성)로 Screen Space Overlay Canvas + InputSystemUIInputModule EventSystem + 상단 상태 텍스트 +
+  하단 Login/Logout 버튼 + 보상 팝업(제목 "돌아오신 것을 환영합니다" / 본문 / "닫기" 버튼) 배선.
+  폰트는 LegacyRuntime.ttf(빌트인). SerializedObject 로 컨트롤러 6개 참조 주입 후 씬 저장.
+- 확인한 것: EditMode 테스트 `Assets/Tests/EditMode/OfflineRewardControllerTests.cs` 5종 신설
+  (null→보상없음 / rejected→보상없음 / 획득 0→보상없음 & HasReward false / 정상→경과·획득량 포함 /
+  캡→"최대 인정 시간에 도달" 포함). EditMode 25/25, PlayMode 14/14 통과. 콘솔 CS 에러 0
+  (RelayService 경고는 무관).
+  플레이모드 검증(에디터 포커스 상태라 이번엔 프레임이 진행됨, frameCount 수천):
+  · PlayerPrefs 에 3시간 12분 전 UTC 시각을 심고 진입 → Start 에서 팝업 자동 표시,
+    본문 "오프라인 보상 (경과 3시간 12분 18초) / 획득 경험치 115389 / 획득 골드 57694",
+    상태 "온라인 — 마지막 접속 시각 기록됨". 스크린샷 `Assets/Screenshots/offline_2-3_popup.png`
+    직접 확인 — 팝업/버튼/텍스트 정상 렌더, 한글 표시됨.
+  · 닫기 버튼 → 팝업 비활성. Logout 버튼 → 상태 "오프라인 — 로그아웃함". 직후 Login →
+    경과 ~0 → 본문 "쌓인 오프라인 보상이 없습니다."(획득 0 처리 확인).
+- 커밋: 345deba (컨트롤러 + EditMode 테스트 + Game.unity), STATUS 갱신은 별도 커밋.
+  주의: ProjectSettings/EditorSettings.asset 의 m_EnterPlayModeOptions 1→0 변화는 이번 작업과
+  무관(플레이모드 진입 부수효과)이라 커밋에 포함하지 않음.
+- 다음 할 일: 3단계-1 (몬스터 스포너 + 몬스터 오브젝트 + Object Pool).
 
 ### 2026-09-07 바퀴 #7
 - 한 일: 2단계-2 슬라이스 — `Assets/Scripts/Offline/OfflineRewardService.cs` 신규.
